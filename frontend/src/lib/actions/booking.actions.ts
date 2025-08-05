@@ -2,12 +2,8 @@
 'use server';
 
 import apiClient from '../api';
+import { revalidatePath } from 'next/cache';
 
-/**
- * Creates a new booking for a service.
- * @param bookingData The data required for the booking.
- * @returns The newly created booking object.
- */
 export async function createBooking(bookingData: any) {
   try {
     const response = await apiClient.post('/bookings/create', bookingData);
@@ -17,10 +13,6 @@ export async function createBooking(bookingData: any) {
   }
 }
 
-/**
- * Fetches all bookings made by the currently authenticated user.
- * @returns A list of the user's bookings.
- */
 export async function getUserBookings() {
   try {
     const response = await apiClient.get('/bookings/user');
@@ -30,10 +22,6 @@ export async function getUserBookings() {
   }
 }
 
-/**
- * Fetches all bookings for services provided by the current user.
- * @returns A list of the provider's bookings.
- */
 export async function getProviderBookings() {
   try {
     const response = await apiClient.get('/bookings/provider');
@@ -43,27 +31,6 @@ export async function getProviderBookings() {
   }
 }
 
-/**
- * Updates the status of a booking.
- * @param bookingId The ID of the booking to update.
- * @param status The new status.
- * @returns Success message.
- */
-export async function updateBookingStatus(bookingId: string, status: string) {
-  try {
-    const response = await apiClient.put(`/bookings/${bookingId}/status`, { status });
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Failed to update booking status.');
-  }
-}
-
-/**
- * Gets unavailable time slots for a service on a specific date.
- * @param serviceId The ID of the service.
- * @param date The date to check.
- * @returns Array of unavailable time slots.
- */
 export async function getUnavailableSlots(serviceId: string, date: Date) {
   try {
     const dateString = date.toISOString().split('T')[0];
@@ -75,71 +42,68 @@ export async function getUnavailableSlots(serviceId: string, date: Date) {
 }
 
 /**
- * Accepts a booking (provider action).
- * @param bookingId The ID of the booking to accept.
- * @returns Success message.
+ * Cancels a booking as a user.
+ * @param bookingId The ID of the booking to cancel.
+ * @param feePaid Indicates if the cancellation fee was paid.
+ * @returns The updated booking object.
  */
+export async function cancelBookingAsUser(bookingId: string, feePaid: boolean = false) {
+  try {
+    const response = await apiClient.post(`/bookings/${bookingId}/cancel-user`, { feePaid });
+    revalidatePath('/bookings');
+    return response.data;
+  } catch (error: any) {
+    return { error: error.response?.data?.message || 'Failed to cancel booking.' };
+  }
+}
+
+// Provider actions
 export async function acceptBooking(bookingId: string) {
   try {
-    const response = await apiClient.put(`/bookings/${bookingId}/status`, { status: 'confirmed' });
+    const response = await apiClient.put(`/bookings/${bookingId}/accept`);
+    revalidatePath('/dashboard');
     return response.data;
   } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Failed to accept booking.');
+    return { error: error.response?.data?.message || 'Failed to accept booking.' };
   }
 }
 
-/**
- * Declines a booking (provider action).
- * @param bookingId The ID of the booking to decline.
- * @returns Success message.
- */
-export async function declineBooking(bookingId: string) {
+export async function declineBooking(bookingId: string, reason: string) {
+    try {
+        const response = await apiClient.put(`/bookings/${bookingId}/decline`, { reason });
+        revalidatePath('/dashboard');
+        return response.data;
+    } catch (error: any) {
+        return { error: error.response?.data?.message || 'Failed to decline booking.' };
+    }
+}
+
+export async function startBooking(bookingId: string) {
   try {
-    const response = await apiClient.put(`/bookings/${bookingId}/status`, { status: 'rejected' });
+    const response = await apiClient.put(`/bookings/${bookingId}/start`);
+    revalidatePath('/dashboard');
     return response.data;
   } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Failed to decline booking.');
+    return { error: error.response?.data?.message || 'Failed to start booking.' };
   }
 }
 
-/**
- * Marks a booking as in progress (provider action).
- * @param bookingId The ID of the booking to mark as in progress.
- * @returns Success message.
- */
-export async function markAsInProgress(bookingId: string) {
-  try {
-    const response = await apiClient.put(`/bookings/${bookingId}/status`, { status: 'in-progress' });
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Failed to mark booking as in progress.');
-  }
+export async function completeBooking(bookingId: string, verificationCode: string) {
+    try {
+        const response = await apiClient.put(`/bookings/${bookingId}/complete`, { verificationCode });
+        revalidatePath('/dashboard');
+        return response.data;
+    } catch (error: any) {
+        return { error: error.response?.data?.message || 'Failed to complete booking.' };
+    }
 }
 
-/**
- * Completes a booking (provider action).
- * @param bookingId The ID of the booking to complete.
- * @returns Success message.
- */
-export async function completeBooking(bookingId: string) {
-  try {
-    const response = await apiClient.put(`/bookings/${bookingId}/status`, { status: 'completed' });
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Failed to complete booking.');
-  }
-}
-
-/**
- * Cancels a booking (user action).
- * @param bookingId The ID of the booking to cancel.
- * @returns Success message.
- */
-export async function cancelBooking(bookingId: string) {
-  try {
-    const response = await apiClient.put(`/bookings/${bookingId}/status`, { status: 'cancelled' });
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Failed to cancel booking.');
-  }
+export async function markAsIncomplete(bookingId: string, reason: string) {
+    try {
+        const response = await apiClient.put(`/bookings/${bookingId}/incomplete`, { reason });
+        revalidatePath('/dashboard');
+        return response.data;
+    } catch (error: any) {
+        return { error: error.response?.data?.message || 'Failed to mark booking as incomplete.' };
+    }
 }

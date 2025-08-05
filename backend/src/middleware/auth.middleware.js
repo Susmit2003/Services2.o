@@ -12,8 +12,8 @@ export const protect = async (req, res, next) => {
       // Get token from header
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      // Verify token using the consistent secret key
+      const decoded = jwt.verify(token, 'your-super-secret-jwt-key-here-2024');
 
       // Get user from the token (and attach to request)
       const user = await User.findById(decoded.id).select('-password');

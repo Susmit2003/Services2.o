@@ -1,123 +1,114 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getUserProfile } from '@/lib/actions/user.actions';
-import type { UserProfile } from '@/types';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { getUserProfile, loginUser, logoutUser as logoutAction } from '@/lib/actions/user.actions';
+import Cookies from 'js-cookie'; // Using js-cookie for robust client-side cookie management
+import type { UserProfile, LoginData } from '@/types';
+import { Loader2 } from 'lucide-react';
 
 interface AuthContextType {
-    currentUser: UserProfile | null;
-    isLoggedIn: boolean;
-    isLoading: boolean;
-    refetchUser: () => Promise<void>;
-    logout: () => void;
+  currentUser: UserProfile | null;
+  isLoggedIn: boolean;
+  isLoading: boolean;
+  login: (loginData: LoginData) => Promise<void>;
+  logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType>({
-    currentUser: null,
-    isLoggedIn: false,
-    isLoading: true,
-    refetchUser: async () => {},
-    logout: () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-    const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isMounted, setIsMounted] = useState(false);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false); // To avoid SSR issues with initial auth check
+  const router = useRouter();
 
-    // Handle client-side mounting
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
-
-    const refetchUser = useCallback(async () => {
-        if (!isMounted) return;
-
-        try {
-            const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-            console.log('🔍 Checking token:', token ? 'Token exists' : 'No token');
-            if (token) {
-                console.log('🔍 Token value (first 20 chars):', token.substring(0, 20) + '...');
-            }
-            
-            if (!token) {
-                console.log('❌ No token found, setting user to null');
-                setCurrentUser(null);
-                setIsLoading(false);
-                return;
-            }
-
-            console.log('✅ Token found, fetching user profile...');
-            const user = await getUserProfile();
-            console.log('✅ User profile fetched:', user ? 'Success' : 'Failed');
-            if (user) {
-                console.log('✅ User details:', { id: user.id, name: user.name, mobile: user.mobile });
-            }
-            setCurrentUser(user as UserProfile | null);
-        } catch (error) {
-            console.error("❌ Failed to refetch user", error);
-            if (error instanceof Error && error.message.includes('Not authorized')) {
-                console.log('❌ Token is invalid, removing from localStorage');
-                if (typeof window !== 'undefined') {
-                    localStorage.removeItem('authToken');
-                }
-            }
-            setCurrentUser(null);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [isMounted]);
-
-    const logout = useCallback(() => {
-        console.log('🚪 Logging out user');
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem('authToken');
-        }
+  const fetchProfileOnLoad = useCallback(async () => {
+    // Read the token from cookies. This works on the client-side.
+    // Server-side actions will read this token directly from request headers.
+    const token = Cookies.get('authToken');
+    
+    if (token) {
+      try {
+        // This server action will read the cookie on the server-side
+        const user = await getUserProfile();
+        setCurrentUser(user);
+      } catch (error) {
+        console.error("Session check failed, removing auth token.", error);
+        Cookies.remove('authToken');
         setCurrentUser(null);
-        setIsLoading(false);
-    }, []);
+      }
+    }
+    setIsLoading(false);
+  }, []);
 
-    // Initial load - check for existing token
-    useEffect(() => {
-        if (isMounted) {
-            console.log('🚀 Initial auth check - mounted:', isMounted);
-            const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-            console.log('🔍 Initial token check:', token ? 'Token exists' : 'No token');
-            
-            if (token) {
-                console.log('✅ Token found on initial load, fetching user...');
-                setIsLoading(true);
-                refetchUser();
-            } else {
-                console.log('❌ No token on initial load, setting loading to false');
-                setIsLoading(false);
-            }
-        }
-    }, [isMounted, refetchUser]);
+  useEffect(() => {
+    // This ensures the auth check runs only on the client after the component has mounted
+    if (!isMounted) {
+      setIsMounted(true);
+      fetchProfileOnLoad();
+    }
+  }, [isMounted, fetchProfileOnLoad]);
 
-    const value = {
-        currentUser,
-        isLoggedIn: !!currentUser,
-        isLoading,
-        refetchUser,
-        logout,
-    };
+  const login = async (loginData: LoginData) => {
+    try {
+      const response = await loginUser(loginData);
+      if (response && response.token) {
+        // Set the auth token in a cookie. It will be sent automatically to the server on subsequent requests.
+        // `secure: true` should be used in production with HTTPS.
+        Cookies.set('authToken', response.token, { expires: 7, path: '/', secure: process.env.NODE_ENV === 'production' });
+        
+        // The response from loginUser already contains the user profile
+        setCurrentUser(response);
+      } else {
+        throw new Error("Login response did not include a token.");
+      }
+    } catch (error) {
+      // On failed login, ensure any stray cookies are removed
+      Cookies.remove('authToken');
+      setCurrentUser(null);
+      // Re-throw the error so the login page can display it to the user
+      throw error;
+    }
+  };
 
-    console.log('🔄 Auth context state:', {
-        currentUser: currentUser ? 'User exists' : 'No user',
-        isLoggedIn: !!currentUser,
-        isLoading,
-        isMounted
-    });
+  const logout = () => {
+    logoutAction(); // This is a placeholder server action
+    Cookies.remove('authToken');
+    setCurrentUser(null);
+    // Use router.replace for a cleaner history stack
+    router.replace('/login');
+  };
 
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // Display a full-page loader while the initial authentication check is running
+  // This prevents the "flicker" of content or redirects.
+  if (!isMounted || isLoading) {
+    return (
+        <div className="flex items-center justify-center h-screen w-full">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+    );
+  }
+
+  const value = {
+    currentUser,
+    isLoggedIn: !!currentUser,
+    isLoading, // This will now be false for all children components
+    login,
+    logout,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
-

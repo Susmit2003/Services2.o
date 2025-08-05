@@ -1,6 +1,7 @@
 'use server';
 
 import apiClient from '../api'; // Using the central API client
+import { cookies } from 'next/headers';
 
 /**
  * Fetches all notifications for the currently authenticated user.
@@ -8,13 +9,22 @@ import apiClient from '../api'; // Using the central API client
  */
 export async function getUserNotifications() {
   try {
-    const response = await apiClient.get('/notifications');
+    // --- FIX: Read token from cookies ---
+    const token = cookies().get('authToken')?.value;
+    if (!token) {
+      throw new Error('Not authorized, no token');
+    }
+
+    const response = await apiClient.get('/notifications/user', {
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
     return response.data;
   } catch (error: any) {
     throw new Error(error.response?.data?.message || 'Failed to fetch notifications.');
   }
 }
-
 /**
  * Marks all of a user's unread notifications as read.
  * @returns A success message.

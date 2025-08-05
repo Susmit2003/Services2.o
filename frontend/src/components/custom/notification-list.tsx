@@ -1,73 +1,70 @@
-
 "use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { CheckCheck } from 'lucide-react';
-import type { Notification } from '@/types';
-import { markAllNotificationsAsRead, markNotificationAsRead } from '@/lib/actions/notification.actions';
-import { cn } from '@/lib/utils';
+import type { Notification } from "@/types";
+import Link from "next/link";
+import { Loader2, AlertTriangle } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from 'date-fns';
 
+// --- FIX: START ---
+// Define an interface for the props that this component will receive.
+// This is what solves the TypeScript error.
 interface NotificationListProps {
-    initialNotifications: Notification[];
+  notifications: Notification[] | undefined;
+  isLoading: boolean;
+  error: any;
+  onClose: () => void; // Function to close the popover when a notification is clicked
 }
+// --- FIX: END ---
 
-export function NotificationList({ initialNotifications }: NotificationListProps) {
-    const [notifications, setNotifications] = useState(initialNotifications);
+export function NotificationList({ notifications, isLoading, error, onClose }: NotificationListProps) {
 
-    const handleMarkAllRead = async () => {
-        await markAllNotificationsAsRead();
-        setNotifications(notifications.map(n => ({...n, isRead: true})));
-    };
-    
-    const handleMarkOneRead = async (notificationId: string) => {
-        await markNotificationAsRead(notificationId);
-        setNotifications(notifications.map(n => n.id === notificationId ? {...n, isRead: true} : n));
-    };
-
-    const hasUnread = notifications.some(n => !n.isRead);
-
+  if (isLoading) {
     return (
-        <div>
-            {hasUnread && (
-                 <div className="mb-4 flex justify-end">
-                    <Button variant="ghost" size="sm" onClick={handleMarkAllRead}>
-                        <CheckCheck className="mr-2 h-4 w-4" />
-                        Mark all as read
-                    </Button>
-                </div>
-            )}
-            <div className="space-y-4">
-                {notifications.map((notif) => (
-                    <div
-                        key={notif.id}
-                        className={cn(
-                            "p-4 rounded-lg border flex items-start gap-4 transition-colors",
-                            !notif.isRead && "bg-primary/5 border-primary/20"
-                        )}
-                    >
-                        <div className="flex-grow">
-                             <Link href={notif.link || '/notifications'} onClick={() => !notif.isRead && handleMarkOneRead(notif.id)}>
-                                <p className="font-semibold hover:text-primary">{notif.title}</p>
-                             </Link>
-                            <p className="text-sm text-muted-foreground">{notif.message}</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}
-                            </p>
-                        </div>
-                         {!notif.isRead && (
-                             <div className="flex-shrink-0">
-                                 <Button variant="ghost" size="sm" onClick={() => handleMarkOneRead(notif.id)} title="Mark as read">
-                                     <CheckCheck className="h-4 w-4" />
-                                     <span className="sr-only">Mark as read</span>
-                                 </Button>
-                             </div>
-                         )}
-                    </div>
-                ))}
-            </div>
-        </div>
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
     );
+  }
+
+  if (error) {
+    return (
+        <div className="flex flex-col items-center justify-center p-4 text-center text-sm text-destructive">
+            <AlertTriangle className="h-6 w-6 mb-2" />
+            <p>Could not load notifications.</p>
+        </div>
+    )
+  }
+
+  if (!notifications || notifications.length === 0) {
+    return <p className="p-8 text-center text-sm text-muted-foreground">You have no notifications.</p>;
+  }
+
+  return (
+    <ScrollArea className="h-96">
+      <div className="flex flex-col">
+        {notifications.map((notification) => (
+          <Link
+            key={notification.id}
+            href={notification.link || '#'}
+            className="block p-4 border-b hover:bg-secondary/50"
+            onClick={onClose} // Close popover on click
+          >
+            <div className="flex items-start">
+                {!notification.isRead && (
+                    <span className="h-2 w-2 mt-1.5 mr-3 rounded-full bg-primary" />
+                )}
+                <div className="flex-1">
+                    <p className={`font-semibold ${!notification.isRead ? 'text-foreground' : 'text-muted-foreground'}`}>{notification.title}</p>
+                    <p className="text-sm text-muted-foreground">{notification.message}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                    </p>
+                </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </ScrollArea>
+  );
 }

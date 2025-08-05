@@ -1,27 +1,22 @@
+// backend/src/routes/user.routes.js
 import express from 'express';
-import { 
-  getProfile, 
-  updateProfile, 
-  changePassword, 
-  deleteAccount 
+import {
+    registerUser,
+    loginUser,
+    getUserProfile,
+    updateUserProfile,
 } from '../controllers/user.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// All routes require authentication
-router.use(protect);
+// Public routes
+router.post('/register', registerUser);
+router.post('/login', loginUser);
 
-// GET /api/users/profile
-router.get('/profile', getProfile);
-
-// PUT /api/users/profile/:userId
-router.put('/profile/:userId', updateProfile);
-
-// POST /api/users/change-password
-router.post('/change-password', changePassword);
-
-// DELETE /api/users/account
-router.delete('/account', deleteAccount);
+// Private routes (protected by the 'protect' middleware)
+router.route('/profile')
+    .get(protect, getUserProfile)
+    .put(protect, updateUserProfile);
 
 export default router;

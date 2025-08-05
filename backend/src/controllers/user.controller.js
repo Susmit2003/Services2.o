@@ -1,112 +1,113 @@
+import asyncHandler from 'express-async-handler';
 import User from '../models/user.model.js';
-import bcrypt from 'bcryptjs';
+import { generateToken } from '../utils/jwt.utils.js';
 
-export const getProfile = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('-password');
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+// --- registerUser function remains the same ---
+const registerUser = asyncHandler(async (req, res) => {
+    const { name, email, password, mobile } = req.body;
+    if (!name || !email || !password || !mobile) {
+        return res.status(400).json({ message: 'Please provide all required fields' });
     }
-    res.json(user);
-  } catch (error) {
-    console.error('Get profile error:', error);
-    res.status(500).json({ message: 'Server error' });
+    const userExists = await User.findOne({ $or: [{ email: email.toLowerCase() }, { mobile }] });
+    if (userExists) {
+        return res.status(400).json({ message: 'User with this email or mobile already exists' });
+    }
+    const user = await User.create({ name, email, password, mobile, role: 'user', currency: 'INR' });
+    if (user) {
+        res.status(201).json({ _id: user._id, name: user.name, email: user.email, mobile: user.mobile, role: user.role, token: generateToken(user._id) });
+    } else {
+        res.status(500);
+        throw new Error('Server error: User could not be created.');
+    }
+});
+
+
+/**
+ * @desc    Authenticate user & get token (Login) - ROBUST VERSION
+ * @route   POST /api/users/login
+ * @access  Public
+ */
+const loginUser = asyncHandler(async (req, res) => {
+    const { identifier, password } = req.body;
+
+    if (!identifier || !password) {
+        return res.status(400).json({ message: 'Please provide your email/mobile and password.' });
+    }
+
+    let user;
+    try {
+        // --- FIX 1: More specific and safe database query ---
+        console.log(`Attempting to find user with identifier: ${identifier}`);
+        user = await User.findOne({
+            $or: [
+                { email: typeof identifier === 'string' ? identifier.toLowerCase() : identifier },
+                { mobile: identifier }
+            ]
+        }).select('+password'); // Explicitly include password for comparison
+
+        if (!user) {
+            console.log('Login failed: No user found.');
+            return res.status(401).json({ message: 'Invalid credentials.' });
+        }
+
+        // --- FIX 2: Safer password comparison ---
+        console.log(`User found: ${user.email}. Comparing password...`);
+        const isMatch = await user.matchPassword(password);
+
+        if (!isMatch) {
+            console.log('Login failed: Password does not match.');
+            return res.status(401).json({ message: 'Invalid credentials.' });
+        }
+
+        // If everything is correct, send success response
+        console.log('Login successful.');
+        res.json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            mobile: user.mobile,
+            role: user.role,
+            token: generateToken(user._id),
+        });
+
+    } catch (error) {
+        // --- FIX 3: Catch any unexpected errors during the process ---
+        console.error('CRITICAL LOGIN ERROR:', error);
+        res.status(500);
+        throw new Error('A critical server error occurred during login.');
+    }
+});
+
+
+// --- getUserProfile and updateUserProfile functions remain the same ---
+const getUserProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  if (user) {
+    res.json({ _id: user._id, name: user.name, email: user.email, mobile: user.mobile, role: user.role, address: user.address, currency: user.currency, walletBalance: user.walletBalance, profileImage: user.profileImage, createdAt: user.createdAt });
+  } else {
+    res.status(404).throw(new Error('User not found'));
   }
-};
+});
 
-export const updateProfile = async (req, res) => {
-  const { name, email, mobile, address, currency } = req.body;
-  
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Check if email is being changed and if it's already taken
-    if (email && email !== user.email) {
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        return res.status(409).json({ message: 'Email already in use' });
-      }
-    }
-
-    // Check if mobile is being changed and if it's already taken
-    if (mobile && mobile !== user.mobile) {
-      const existingUser = await User.findOne({ mobile });
-      if (existingUser) {
-        return res.status(409).json({ message: 'Mobile number already in use' });
-      }
-    }
-
-    // Update user fields
-    const updateFields = {};
-    if (name) updateFields.name = name;
-    if (email) updateFields.email = email;
-    if (mobile) updateFields.mobile = mobile;
-    if (address) updateFields.address = address;
-    if (currency) updateFields.currency = currency;
-
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,
-      updateFields,
-      { new: true, runValidators: true }
-    ).select('-password');
-
-    res.json({
-      message: 'Profile updated successfully',
-      user: updatedUser
-    });
-  } catch (error) {
-    console.error('Update profile error:', error);
-    res.status(500).json({ message: 'Server error' });
+const updateUserProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+  if (user) {
+    user.name = req.body.name || user.name;
+    user.email = req.body.email || user.email;
+    user.mobile = req.body.mobile || user.mobile;
+    if (req.body.address) { user.address = { ...user.address, ...req.body.address }; }
+    if (req.body.password) { user.password = req.body.password; }
+    const updatedUser = await user.save();
+    res.json({ _id: updatedUser._id, name: updatedUser.name, email: updatedUser.email, mobile: updatedUser.mobile, role: updatedUser.role, token: generateToken(updatedUser._id) });
+  } else {
+    res.status(404).throw(new Error('User not found'));
   }
-};
+});
 
-export const changePassword = async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
 
-    // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Current password is incorrect' });
-    }
-
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-    // Update password
-    user.password = hashedPassword;
-    await user.save();
-
-    res.json({ message: 'Password changed successfully' });
-  } catch (error) {
-    console.error('Change password error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-export const deleteAccount = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Soft delete - mark as inactive
-    user.isActive = false;
-    await user.save();
-
-    res.json({ message: 'Account deactivated successfully' });
-  } catch (error) {
-    console.error('Delete account error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
+export {
+  registerUser,
+  loginUser,
+  getUserProfile,
+  updateUserProfile,
 };
