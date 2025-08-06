@@ -1,38 +1,49 @@
+// backend/src/middleware/auth.middleware.js
 import jwt from 'jsonwebtoken';
+import asyncHandler from 'express-async-handler';
 import User from '../models/user.model.js';
+import { secret } from '../utils/jwt.utils.js'; // <-- Import the secret from our utility file
 
-export const protect = async (req, res, next) => {
+const protect = asyncHandler(async (req, res, next) => {
   let token;
 
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
-      // Get token from header
+      // 1. Get token from header
       token = req.headers.authorization.split(' ')[1];
 
-      // Verify token using the consistent secret key
-      const decoded = jwt.verify(token, 'your-super-secret-jwt-key-here-2024');
+      // 2. Verify the token using the consistent secret
+      const decoded = jwt.verify(token, secret);
 
-      // Get user from the token (and attach to request)
+      // 3. Find the user by ID from the token, excluding the password
       const user = await User.findById(decoded.id).select('-password');
-      
+
+      // 4. Perform checks
       if (!user) {
-        return res.status(401).json({ message: 'User not found' });
+        res.status(401);
+        throw new Error('Not authorized, user not found for this token');
       }
 
       if (!user.isActive) {
-        return res.status(401).json({ message: 'User account is deactivated' });
+        res.status(403); // 403 Forbidden
+        throw new Error('User account is deactivated');
       }
-
+      
+      // 5. Attach user object to the request
       req.user = user;
       next();
+
     } catch (error) {
-      console.error('Auth middleware error:', error);
-      return res.status(401).json({ message: 'Not authorized, token failed' });
+      console.error('AUTHENTICATION ERROR:', error.message);
+      res.status(401);
+      throw new Error('Not authorized, token failed');
     }
-  } else {
-    return res.status(401).json({ message: 'Not authorized, no token' });
   }
-};
+
+  if (!token) {
+    res.status(401);
+    throw new Error('Not authorized, no token provided');
+  }
+});
+
+export { protect };

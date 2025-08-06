@@ -75,7 +75,7 @@ export default async function ProviderServicesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {allServices.map(service => (
-            <Card key={service.id} className={`flex flex-col shadow-lg transition-opacity ${service.status !== 'Active' ? 'opacity-70 bg-muted/30' : ''}`}>
+            <Card key={service._id} className={`flex flex-col shadow-lg transition-opacity ${service.status !== 'Active' ? 'opacity-70 bg-muted/30' : ''}`}>
               <Image
                 src={service.images[0] || "https://placehold.co/300x200.png"}
                 alt={service.title}
@@ -122,16 +122,16 @@ export default async function ProviderServicesPage() {
               <CardFooter className="border-t p-4 flex justify-between items-center gap-2">
                 <div className="flex-1">
                   {service.status !== 'Archived' && (
-                    <ServiceStatusToggle serviceId={service.id} initialStatus={service.status as 'Active' | 'Inactive'} />
+                    <ServiceStatusToggle serviceId={service._id} initialStatus={service.status as 'Active' | 'Inactive'} />
                   )}
                 </div>
                 <div className="flex gap-2">
-                    <Link href={`/services/${service.id}/book`}>
+                    <Link href={`/services/${service._id}/book`}>
                       <Button variant="outline" size="icon" title="View Public Listing" disabled={service.status !== 'Active'}>
                         <Eye className="h-4 w-4" />
                       </Button>
                     </Link>
-                    <ArchiveServiceButton serviceId={service.id} serviceTitle={service.title} isArchived={service.status === 'Archived'} />
+                    <ArchiveServiceButton serviceId={service._id} serviceTitle={service.title} isArchived={service.status === 'Archived'} />
                 </div>
               </CardFooter>
             </Card>

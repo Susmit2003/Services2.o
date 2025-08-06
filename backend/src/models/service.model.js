@@ -1,7 +1,18 @@
 import mongoose from 'mongoose';
 
 const serviceSchema = new mongoose.Schema({
-  provider: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // --- FIX: The schema now correctly expects 'providerId' and 'providerName' ---
+  // This matches the data being sent by the controller and resolves the validation error.
+  providerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: [true, 'A provider ID is required.'],
+    ref: 'User',
+  },
+  providerName: {
+    type: String,
+    required: [true, 'A provider name is required.'],
+  },
+  
   title: { type: String, required: true },
   description: { type: String, required: true },
   category: { type: String, required: true },
@@ -14,36 +25,10 @@ const serviceSchema = new mongoose.Schema({
   status: { type: String, enum: ['Active', 'Inactive', 'Archived'], default: 'Active' },
   availability: { type: String, default: 'Available' },
   ratingAvg: { type: Number, default: 0 },
-  ratingSum: { type: Number, default: 0 },
   totalReviews: { type: Number, default: 0 },
-  isFeatured: { type: Boolean, default: false },
-  tags: [{ type: String }]
+  totalBookings: { type: Number, default: 0 }, // Added for consistency
 }, { timestamps: true });
 
-// Virtual for provider name
-serviceSchema.virtual('providerName', {
-  ref: 'User',
-  localField: 'provider',
-  foreignField: '_id',
-  justOne: true,
-  get: function() {
-    return this.populated('provider') ? this.provider.name : null;
-  }
-});
-
-// Ensure virtuals are serialized
-serviceSchema.set('toJSON', { virtuals: true });
-serviceSchema.set('toObject', { virtuals: true });
-
-// Add indexes for better query performance
-serviceSchema.index({ status: 1, category: 1, subCategory: 1 });
-serviceSchema.index({ status: 1, provider: 1 });
-serviceSchema.index({ status: 1, ratingAvg: -1 });
-serviceSchema.index({ status: 1, price: 1 });
-serviceSchema.index({ status: 1, zipCodes: 1 });
-serviceSchema.index({ status: 1, createdAt: -1 });
-serviceSchema.index({ title: 'text', description: 'text', category: 'text' });
-serviceSchema.index({ isFeatured: 1, status: 1 });
 
 const Service = mongoose.model('Service', serviceSchema);
 export default Service;

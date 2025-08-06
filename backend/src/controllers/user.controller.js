@@ -1,29 +1,48 @@
 import asyncHandler from 'express-async-handler';
 import User from '../models/user.model.js';
-import { generateToken } from '../utils/jwt.utils.js';
+import { generateToken } from '../utils/jwt.utils.js'; // <-- Use the centralized token generator
 
-// --- registerUser function remains the same ---
+/**
+ * @desc    Register a new user
+ * @route   POST /api/users/register
+ * @access  Public
+ */
 const registerUser = asyncHandler(async (req, res) => {
     const { name, email, password, mobile } = req.body;
+
     if (!name || !email || !password || !mobile) {
         return res.status(400).json({ message: 'Please provide all required fields' });
     }
+
     const userExists = await User.findOne({ $or: [{ email: email.toLowerCase() }, { mobile }] });
     if (userExists) {
-        return res.status(400).json({ message: 'User with this email or mobile already exists' });
+        return res.status(400).json({ message: 'User with this email or mobile number already exists' });
     }
-    const user = await User.create({ name, email, password, mobile, role: 'user', currency: 'INR' });
+
+    const user = await User.create({
+        name,
+        email,
+        password,
+        mobile,
+    });
+
     if (user) {
-        res.status(201).json({ _id: user._id, name: user.name, email: user.email, mobile: user.mobile, role: user.role, token: generateToken(user._id) });
+        res.status(201).json({
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            mobile: user.mobile,
+            role: user.role,
+            token: generateToken(user._id), // Use the consistent function
+        });
     } else {
         res.status(500);
         throw new Error('Server error: User could not be created.');
     }
 });
 
-
 /**
- * @desc    Authenticate user & get token (Login) - ROBUST VERSION
+ * @desc    Authenticate user & get token (Login)
  * @route   POST /api/users/login
  * @access  Public
  */
@@ -34,76 +53,92 @@ const loginUser = asyncHandler(async (req, res) => {
         return res.status(400).json({ message: 'Please provide your email/mobile and password.' });
     }
 
-    let user;
-    try {
-        // --- FIX 1: More specific and safe database query ---
-        console.log(`Attempting to find user with identifier: ${identifier}`);
-        user = await User.findOne({
-            $or: [
-                { email: typeof identifier === 'string' ? identifier.toLowerCase() : identifier },
-                { mobile: identifier }
-            ]
-        }).select('+password'); // Explicitly include password for comparison
+    const user = await User.findOne({
+        $or: [
+            { email: typeof identifier === 'string' ? identifier.toLowerCase() : identifier },
+            { mobile: identifier }
+        ]
+    }).select('+password');
 
-        if (!user) {
-            console.log('Login failed: No user found.');
-            return res.status(401).json({ message: 'Invalid credentials.' });
+    if (user && (await user.matchPassword(password))) {
+        if (!user.isActive) {
+            return res.status(403).json({ message: 'Your account has been deactivated. Please contact support.' });
         }
-
-        // --- FIX 2: Safer password comparison ---
-        console.log(`User found: ${user.email}. Comparing password...`);
-        const isMatch = await user.matchPassword(password);
-
-        if (!isMatch) {
-            console.log('Login failed: Password does not match.');
-            return res.status(401).json({ message: 'Invalid credentials.' });
-        }
-
-        // If everything is correct, send success response
-        console.log('Login successful.');
+        
         res.json({
             _id: user._id,
             name: user.name,
             email: user.email,
             mobile: user.mobile,
             role: user.role,
-            token: generateToken(user._id),
+            token: generateToken(user._id), // Use the consistent function
         });
-
-    } catch (error) {
-        // --- FIX 3: Catch any unexpected errors during the process ---
-        console.error('CRITICAL LOGIN ERROR:', error);
-        res.status(500);
-        throw new Error('A critical server error occurred during login.');
+    } else {
+        return res.status(401).json({ message: 'Invalid credentials.' });
     }
 });
 
-
-// --- getUserProfile and updateUserProfile functions remain the same ---
+/**
+ * @desc    Get user profile
+ * @route   GET /api/users/profile
+ * @access  Private
+ */
 const getUserProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
-  if (user) {
-    res.json({ _id: user._id, name: user.name, email: user.email, mobile: user.mobile, role: user.role, address: user.address, currency: user.currency, walletBalance: user.walletBalance, profileImage: user.profileImage, createdAt: user.createdAt });
-  } else {
-    res.status(404).throw(new Error('User not found'));
-  }
+  // The 'protect' middleware has already found the user and attached it to req.user
+  const user = req.user;
+  res.json({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    mobile: user.mobile,
+    role: user.role,
+    address: user.address,
+    currency: user.currency,
+    walletBalance: user.walletBalance,
+    profileImage: user.profileImage,
+    createdAt: user.createdAt,
+  });
 });
 
+/**
+ * @desc    Update user profile
+ * @route   PUT /api/users/profile
+ * @access  Private
+ */
 const updateUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
+
   if (user) {
     user.name = req.body.name || user.name;
     user.email = req.body.email || user.email;
     user.mobile = req.body.mobile || user.mobile;
-    if (req.body.address) { user.address = { ...user.address, ...req.body.address }; }
-    if (req.body.password) { user.password = req.body.password; }
+
+    if (req.body.address) {
+        user.address = {
+            ...user.address,
+            ...req.body.address
+        };
+    }
+    
+    if (req.body.password) {
+      user.password = req.body.password;
+    }
+
     const updatedUser = await user.save();
-    res.json({ _id: updatedUser._id, name: updatedUser.name, email: updatedUser.email, mobile: updatedUser.mobile, role: updatedUser.role, token: generateToken(updatedUser._id) });
+
+    res.json({
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      mobile: updatedUser.mobile,
+      role: updatedUser.role,
+      token: generateToken(updatedUser._id), // Re-issue token with consistent function
+    });
   } else {
-    res.status(404).throw(new Error('User not found'));
+    res.status(404);
+    throw new Error('User not found');
   }
 });
-
 
 export {
   registerUser,

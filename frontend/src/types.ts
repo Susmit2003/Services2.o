@@ -1,9 +1,10 @@
 // frontend/src/types.ts
+import type { LucideIcon } from 'lucide-react';
 
 // --- Authentication & User ---
 
 export interface LoginData {
-  identifier: string;
+  identifier: string; // Can be email or mobile
   password: string;
 }
 
@@ -15,29 +16,72 @@ export interface SignupData {
 }
 
 export interface UserProfile {
-  _id: string; // Use _id for MongoDB consistency
+  _id: string;
   id: string;
   name: string;
   email: string;
   mobile?: string;
   role: 'user' | 'provider' | 'admin';
-  profileImage?: string;
+  isActive: boolean;
+  profileImage?: string | null;
   address?: {
-    line1: string;
-    city: string;
-    pinCode: string;
+    line1?: string;
+    city?: string;
+    pinCode?: string;
   };
   currency: string;
   walletBalance?: number;
   createdAt: string;
   updatedAt: string;
+  username?: string;
+  fullName?: string;
+  mobileNumber?: string;
 }
 
 
 // --- Service & Booking ---
 
+export interface ServiceCategory {
+    name: string;
+    query: string;
+    icon: LucideIcon;
+    color: string;
+    bgColor: string;
+    subcategories: {
+        name: string;
+        query: string;
+        icon?: LucideIcon;
+        color?: string;
+    }[];
+}
+
+export interface ServiceFormData {
+  title: string;
+  description: string;
+  category: string;
+  subCategory?: string;
+  price: number;
+  priceDisplay: string;
+  images: string[];
+  zipCodes: string[];
+  timeSlots: string[];
+}
+
+export interface BookingFormData {
+  serviceId: string;
+  bookingDate: string;
+  timeSlot: string;
+  address: {
+    line1: string;
+    city: string;
+    pinCode: string;
+  };
+  totalPrice: number;
+  currency: string;
+}
+
 export interface Service {
-  id: string;
+  _id: string;
   title: string;
   description: string;
   category: string;
@@ -49,6 +93,7 @@ export interface Service {
   providerId: string;
   ratingAvg?: number;
   totalReviews?: number;
+  totalBookings?: number; // <-- FIX: Added the missing property
   zipCodes: string[];
   timeSlots: string[];
   status: 'Active' | 'Inactive' | 'Archived';
@@ -60,8 +105,8 @@ export interface Service {
 export interface Booking {
   id: string;
   serviceId: string;
-  service?: Service; // Service object might not always be populated
-  serviceTitle?: string; // Fallback title
+  service?: Service;
+  serviceTitle?: string;
   userId: string;
   providerId: string;
   providerName: string;
@@ -116,4 +161,13 @@ export interface Notification {
   isRead: boolean;
   createdAt: string;
   link?: string;
+}
+
+export interface Transaction {
+    id: string;
+    type: 'top_up' | 'booking_fee' | 'cancellation_fee' | 'refund';
+    amount: number;
+    description: string;
+    currency: string;
+    createdAt: string;
 }

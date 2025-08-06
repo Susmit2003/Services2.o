@@ -1,6 +1,7 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+// --- FIX: Corrected the import path to match your project structure ---
 import connectDB from './src/services/db.service.js';
 
 // Import routes
@@ -67,15 +68,16 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  res.status(statusCode).json({ 
+    message: err.message,
+    stack: process.env.NODE_ENV === 'production' ? '🥞' : err.stack,
   });
 });
 
 // 404 handler
 app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  res.status(404).json({ message: `Route not found - Cannot ${req.method} ${req.originalUrl}` });
 });
 
 const PORT = process.env.PORT || 5000;

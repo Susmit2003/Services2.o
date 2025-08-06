@@ -17,48 +17,40 @@ import { useAuth } from '@/context/auth-context';
 import { TimeSlotSelector } from '@/components/custom/time-slot-selector';
 import { serviceHierarchy, currencySymbols } from '@/lib/constants';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type { UserProfile } from '@/types';
+import type { UserProfile, ServiceFormData } from '@/types';
+import { uploadImage } from '@/lib/actions/cloudinary.actions'; // <-- FIX: Import the REAL uploadImage action
 
 const MAX_ZIP_CODES = 5;
 
-// Placeholder for a real image upload function
-const uploadImage = async (preview: string, path: string): Promise<{ secure_url?: string; error?: string }> => {
-    console.log("Simulating image upload for:", path);
-    return new Promise(resolve => setTimeout(() => resolve({ secure_url: "https://placehold.co/600x400.png" }), 1000));
-};
-
+// Helper function to parse a numeric price from a display string (e.g., "$50/hr")
 const parsePrice = (priceDisplay: string): number => {
     const numbers = priceDisplay.match(/\d+(\.\d+)?/g);
     return numbers ? parseFloat(numbers[0]) : 0;
 };
 
-// Component to render when user profile is incomplete
+// Component to render when the user's profile is incomplete
 const IncompleteProfile = () => (
-  <div className="container mx-auto max-w-3xl py-8">
-    <Card className="shadow-xl">
-      <CardHeader>
-        <CardTitle className="font-headline text-2xl md:text-3xl">Complete Your Profile</CardTitle>
-        <CardDescription>You need to add an address with a PIN/ZIP code to your profile before you can add a service.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Address Information Required</AlertTitle>
-          <AlertDescription>
-            Your service listings need a default location. Please go to your profile and add your address details.
-          </AlertDescription>
-        </Alert>
-      </CardContent>
-      <CardFooter>
-        <Link href="/profile">
-          <Button>Go to Profile</Button>
-        </Link>
-      </CardFooter>
-    </Card>
-  </div>
+    <div className="container mx-auto max-w-3xl py-8">
+        <Card className="shadow-xl">
+            <CardHeader>
+                <CardTitle className="font-headline text-2xl md:text-3xl">Complete Your Profile</CardTitle>
+                <CardDescription>You need to add an address with a PIN/ZIP code to your profile before you can add a service.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Address Information Required</AlertTitle>
+                    <AlertDescription>Your service listings need a default location. Please go to your profile and add your address details.</AlertDescription>
+                </Alert>
+            </CardContent>
+            <CardFooter>
+                <Link href="/profile"><Button>Go to Profile</Button></Link>
+            </CardFooter>
+        </Card>
+    </div>
 );
 
-// The main form component
+// The main form component, now corrected
 const AddServiceForm = ({ user }: { user: UserProfile }) => {
   const router = useRouter();
   const { toast } = useToast();
@@ -71,7 +63,6 @@ const AddServiceForm = ({ user }: { user: UserProfile }) => {
     priceDisplay: ''
   });
   
-  // Safely initialize zipCodes with the user's pincode if it exists
   const [zipCodes, setZipCodes] = useState<string[]>(user.address?.pinCode ? [user.address.pinCode] : ['']);
   const [availableSubcategories, setAvailableSubcategories] = useState<string[]>([]);
   const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([]);
@@ -121,19 +112,13 @@ const AddServiceForm = ({ user }: { user: UserProfile }) => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 4 * 1024 * 1024) {
-        toast({
-          title: "File too large",
-          description: "Please upload an image smaller than 4MB.",
-          variant: "destructive",
-        });
+      if (file.size > 4 * 1024 * 1024) { // 4MB limit
+        toast({ title: "File too large", description: "Please upload an image smaller than 4MB.", variant: "destructive" });
         return;
       }
       setServiceImageFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setServiceImagePreview(reader.result as string);
-      };
+      reader.onloadend = () => setServiceImagePreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -142,56 +127,61 @@ const AddServiceForm = ({ user }: { user: UserProfile }) => {
   const pricePlaceholder = `e.g., ${currencySymbol}50/hr or From ${currencySymbol}120`;
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+      e.preventDefault();
+    // setIsLoading(true);
 
-    const validZipCodes = zipCodes.filter(zc => zc.trim() !== '');
-    const price = parsePrice(formData.priceDisplay);
-
-    if (price <= 0) {
-        toast({
-            title: "Invalid Price",
-            description: "Please enter a valid price for your service.",
-            variant: "destructive"
-        });
-        setIsLoading(false);
+    if (!user || !user._id) { // <-- Extra safety check
+        toast({ title: "Authentication Error", variant: "destructive" });
         return;
     }
     
     try {
       let imageUrls = ['https://placehold.co/600x400.png'];
 
-      if (serviceImageFile && serviceImagePreview) {
-        const uploadResult = await uploadImage(serviceImagePreview, `service_images/${user.id}`);
-        if (uploadResult.error || !uploadResult.secure_url) {
+      // --- FIX: Use the REAL uploadImage action with FormData ---
+       if (serviceImageFile) {
+        const imageFormData = new FormData();
+        imageFormData.append('image', serviceImageFile);
+        
+        const uploadResult = await uploadImage(imageFormData, `service_images/${user._id}`);
+        
+        // --- FIX: Use a type guard to safely check the result ---
+        if ('error' in uploadResult) {
+            // TypeScript now knows uploadResult has an 'error' property
             throw new Error(uploadResult.error || "Image upload failed.");
         }
+        
+        // TypeScript now knows uploadResult has a 'secure_url' property
         imageUrls = [uploadResult.secure_url];
       }
 
-      const result = await createService({
+      const price = parsePrice(formData.priceDisplay);
+      if (price <= 0) {
+        throw new Error("Please enter a valid price for your service.");
+      }
+      
+      const payload: ServiceFormData = {
         ...formData,
         price,
-        zipCodes: validZipCodes,
+        zipCodes: zipCodes.filter(zc => zc.trim() !== ''),
         images: imageUrls, 
         timeSlots: selectedTimeSlots,
-      });
+      };
+
+      const result = await createService(payload);
 
       if (result.error) {
         throw new Error(result.error);
       }
       
-      toast({
-          title: "Service Added!",
-          description: "Your new service has been listed successfully.",
-      });
+      toast({ title: "Service Added!", description: "Your new service has been listed successfully." });
       router.push('/dashboard/my-services');
 
     } catch (error) {
-      console.error(error);
+      console.error("Add Service Error:", error);
       toast({
           title: "Error Creating Service",
-          description: (error as Error).message || "Could not add service. Please check your inputs and try again.",
+          description: (error as Error).message,
           variant: "destructive"
       });
     } finally {
@@ -281,6 +271,7 @@ const AddServiceForm = ({ user }: { user: UserProfile }) => {
 };
 
 
+// Main page component to handle auth checks
 export default function AddServicePage() {
   const { currentUser } = useAuth();
 
@@ -295,8 +286,7 @@ export default function AddServicePage() {
     );
   }
 
-  // This is the definitive check. If the user doesn't have an address with a pin code,
-  // we render the IncompleteProfile component. Otherwise, we render the form.
+  // Check if the user has a valid address before allowing them to add a service
   if (!currentUser.address || !currentUser.address.pinCode) {
     return <IncompleteProfile />;
   }

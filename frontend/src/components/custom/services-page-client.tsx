@@ -3,24 +3,23 @@
 import React, { useState, useEffect, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Separator } from '@/components/ui/separator';
-import { ListFilter, Search, Star, MapPin, Clock, User, ArrowRight, Sparkles, Wrench, Paintbrush, Stethoscope, Car, Home, Utensils, Palette, Camera, Dumbbell, BookOpen, Music, Gamepad2, Heart, Shield, Zap, Users, Award, TrendingUp } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription, SheetFooter } from "@/components/ui/sheet";
+import { ListFilter, Search, Star, MapPin, X, LayoutGrid, ArrowRight } from 'lucide-react';
 import { serviceHierarchy } from '@/lib/constants';
 import { ServiceCard } from './service-card';
-import { CategoryCard } from './category-card';
-import { SubcategoryCard } from './subcategory-card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getServices } from '@/lib/actions/service.actions';
-import useSWR from 'swr';
-import type { Service } from '@/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import Link from 'next/link';
+import { Separator } from '@/components/ui/separator';
+import type { Service, ServiceCategory } from '@/types';
 
+// --- FIX: Add 'initialCategories' and 'isLoading' to the props interface ---
 interface ServicesPageClientProps {
-  initialServices: Service[];
+  initialServices: Service[] | null;
+  categories: ServiceCategory[] | null;// This was the main missing piece
   initialFilters: {
     category: string;
     subcategory: string;
@@ -28,16 +27,17 @@ interface ServicesPageClientProps {
     pincode: string;
     rating: string;
   };
+  isLoading: boolean; // This was also missing
 }
 
 type Filters = ServicesPageClientProps['initialFilters'];
 
+// --- Helper Components (Your original code is correct) ---
+
 const FilterInputs = ({ filters, handleFilterChange }: { filters: Filters, handleFilterChange: (key: keyof Filters, value: string) => void }) => (
-  <>
-    <div className="space-y-1">
-      <Label htmlFor="search-filter" className="text-sm font-medium text-muted-foreground flex items-center">
-        <Search className="w-4 h-4 mr-1" /> Service or Provider
-      </Label>
+    <>
+        <div className="space-y-1">
+      <Label htmlFor="search-filter" className="text-sm font-medium text-muted-foreground flex items-center"><Search className="w-4 h-4 mr-1" /> Service or Provider</Label>
       <Input
         id="search-filter"
         placeholder="e.g., House Cleaning, Alice Wonderland"
@@ -47,9 +47,7 @@ const FilterInputs = ({ filters, handleFilterChange }: { filters: Filters, handl
       />
     </div>
     <div className="space-y-1">
-      <Label htmlFor="pincode-filter" className="text-sm font-medium text-muted-foreground flex items-center">
-        <MapPin className="w-4 h-4 mr-1" /> PIN/ZIP Code
-      </Label>
+      <Label htmlFor="pincode-filter" className="text-sm font-medium text-muted-foreground flex items-center"><MapPin className="w-4 h-4 mr-1" /> PIN/ZIP Code</Label>
       <Input
         id="pincode-filter"
         placeholder="Enter your PIN/ZIP code"
@@ -59,56 +57,62 @@ const FilterInputs = ({ filters, handleFilterChange }: { filters: Filters, handl
       />
     </div>
     <div className="space-y-1">
-      <Label htmlFor="rating-filter" className="text-sm font-medium text-muted-foreground flex items-center">
-        <Star className="w-4 h-4 mr-1" /> Minimum Rating
-      </Label>
-      <Select value={filters.rating} onValueChange={(value) => handleFilterChange('rating', value)}>
-        <SelectTrigger className="h-11 bg-background">
-          <SelectValue placeholder="Any rating" />
+      <Label htmlFor="rating-filter" className="text-sm font-medium text-muted-foreground flex items-center"><Star className="w-4 h-4 mr-1" /> Minimum Rating</Label>
+      <Select 
+        value={filters.rating} 
+        onValueChange={(value) => handleFilterChange('rating', value === 'all' ? '' : value)}
+      >
+        <SelectTrigger id="rating-filter" className="h-11 bg-background">
+          <SelectValue placeholder="Any Rating" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Any rating</SelectItem>
-          <SelectItem value="4">4+ stars</SelectItem>
-          <SelectItem value="3">3+ stars</SelectItem>
-          <SelectItem value="2">2+ stars</SelectItem>
+          <SelectItem value="all">Any Rating</SelectItem>
+          <SelectItem value="4.5">4.5+ Stars</SelectItem>
+          <SelectItem value="4">4+ Stars</SelectItem>
+          <SelectItem value="3.5">3.5+ Stars</SelectItem>
+          <SelectItem value="3">3+ Stars</SelectItem>
         </SelectContent>
       </Select>
     </div>
-  </>
+    </>
 );
 
-const FilterControls = ({ 
-  inSheet = false, 
-  filters, 
-  handleFilterChange, 
-  updateUrl, 
-  setFilters 
-}: { 
-  inSheet?: boolean,
-  filters: Filters, 
-  handleFilterChange: (key: keyof Filters, value: string) => void,
-  updateUrl: () => void,
-  setFilters: React.Dispatch<React.SetStateAction<Filters>>
+const FilterControls = ({ inSheet = false, filters, handleFilterChange, updateUrl, setFilters }: { 
+    inSheet?: boolean,
+    filters: Filters, 
+    handleFilterChange: (key: keyof Filters, value: string) => void,
+    updateUrl: () => void,
+    setFilters: React.Dispatch<React.SetStateAction<Filters>>
 }) => {
-  return (
-    <div className={`space-y-4 ${inSheet ? '' : 'grid grid-cols-1 md:grid-cols-3 gap-4'}`}>
-      <FilterInputs filters={filters} handleFilterChange={handleFilterChange} />
-      <div className="flex gap-2">
-        <Button onClick={updateUrl} className="flex-1">
-          Apply Filters
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={() => setFilters({ category: '', subcategory: '', searchTerm: '', pincode: '', rating: '' })}
-        >
-          Clear
-        </Button>
+  if (inSheet) {
+    return (
+      <div className="space-y-4 p-4">
+        <FilterInputs filters={filters} handleFilterChange={handleFilterChange} />
+        <SheetFooter className="pt-4">
+          <Button variant="ghost" onClick={() => setFilters({category: filters.category, subcategory: filters.subcategory, searchTerm: '', pincode: '', rating: ''})} className="w-full sm:w-auto">
+            <X className="w-4 h-4 mr-1" /> Clear
+          </Button>
+          <Button onClick={updateUrl} className="w-full sm:w-auto">
+            <ListFilter className="w-4 h-4 mr-1" /> Apply Filters
+          </Button>
+        </SheetFooter>
       </div>
-    </div>
+    );
+  }
+  
+  return (
+    <>
+      <FilterInputs filters={filters} handleFilterChange={handleFilterChange} />
+      <Button onClick={updateUrl} className="w-full h-11 self-end">
+        <ListFilter className="w-4 h-4 mr-1" /> Update Search
+      </Button>
+    </>
   );
 };
 
-export function ServicesPageClient({ initialServices, initialFilters }: ServicesPageClientProps) {
+
+// -- MAIN COMPONENT --
+export function ServicesPageClient({ initialServices, categories, initialFilters, isLoading: initialIsLoading }: ServicesPageClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -120,39 +124,9 @@ export function ServicesPageClient({ initialServices, initialFilters }: Services
   }, [initialFilters]);
 
   const selectedCategoryData = useMemo(() => 
-      serviceHierarchy.find(c => c.query === filters.category),
-      [filters.category]
+      (Array.isArray(categories) ? categories : serviceHierarchy).find(c => c.query === filters.category),
+      [filters.category, categories]
   );
-
-  // SWR for real-time data fetching
-  const shouldFetchServices = filters.category && (filters.subcategory || (selectedCategoryData && selectedCategoryData.subcategories.length === 0));
-  
-  const { data: services = initialServices, error, mutate } = useSWR(
-    shouldFetchServices ? ['services', filters] : null,
-    async () => {
-      const categoryName = selectedCategoryData?.name || '';
-      const subcategoryName = selectedCategoryData?.subcategories.find(sc => sc.query === filters.subcategory)?.name || '';
-      
-      return await getServices({
-        category: categoryName,
-        subcategory: subcategoryName,
-        search: filters.searchTerm,
-        pincode: filters.pincode,
-        rating: filters.rating,
-      });
-    },
-    {
-      fallbackData: initialServices,
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
-      dedupingInterval: 2000,
-    }
-  );
-
-  // Function to refresh services data
-  const refreshServices = () => {
-    mutate();
-  };
   
   const handleFilterChange = (key: keyof Filters, value: string) => {
     setFilters(prev => ({...prev, [key]: value}));
@@ -226,13 +200,27 @@ export function ServicesPageClient({ initialServices, initialFilters }: Services
     return "Select a category to find top-rated professionals for your home service needs.";
   }
 
-  const isLoading = isPending || (shouldFetchServices && !services && !error);
-  const currentServices = services || [];
+   const isLoading = isPending || initialIsLoading;
+  const services = Array.isArray(initialServices) ? initialServices : [];
 
   const showMainCategories = !filters.category;
   const showSubcategories = selectedCategoryData && selectedCategoryData.subcategories.length > 0 && !filters.subcategory;
   const showServicesList = (selectedCategoryData && selectedCategoryData.subcategories.length === 0) || !!filters.subcategory;
-
+  
+  const ServiceSkeleton = () => (
+      <Card className="overflow-hidden">
+          <Skeleton className="h-48 w-full" />
+          <CardContent className="p-4 space-y-3">
+              <Skeleton className="h-6 w-3/4 rounded" />
+              <Skeleton className="h-4 w-1/2 rounded" />
+              <Skeleton className="h-4 w-full rounded" />
+              <Skeleton className="h-4 w-2/3 rounded" />
+          </CardContent>
+          <CardFooter className="p-4 border-t">
+              <Skeleton className="h-10 w-full rounded" />
+          </CardFooter>
+      </Card>
+  );
   return (
     <div className="container mx-auto py-8">
       <header className="mb-8">
@@ -252,15 +240,16 @@ export function ServicesPageClient({ initialServices, initialFilters }: Services
               <ListFilter className="mr-2 h-5 w-5" /> Filters
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-[400px] sm:w-[540px]">
-            <SheetHeader>
-              <SheetTitle>Filter Services</SheetTitle>
+          <SheetContent side="bottom" className="h-[85vh] flex flex-col">
+            <SheetHeader className="p-4 border-b">
+              <SheetTitle className="text-xl font-headline">Filter Services</SheetTitle>
+              <SheetDescription>Refine your search to find the perfect provider.</SheetDescription>
             </SheetHeader>
-            <div className="mt-6">
+            <div className="flex-grow overflow-y-auto">
               <FilterControls 
-                inSheet={true}
-                filters={filters} 
-                handleFilterChange={handleFilterChange} 
+                inSheet 
+                filters={filters}
+                handleFilterChange={handleFilterChange}
                 updateUrl={updateUrl}
                 setFilters={setFilters}
               />
@@ -268,106 +257,130 @@ export function ServicesPageClient({ initialServices, initialFilters }: Services
           </SheetContent>
         </Sheet>
       </div>
-
-      {/* Main Categories */}
-      {showMainCategories && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {serviceHierarchy.map((category) => (
-            <CategoryCard key={category.query} category={category} />
-          ))}
-        </div>
-      )}
-
-      {/* Subcategories */}
-      {showSubcategories && selectedCategoryData && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {selectedCategoryData.subcategories.map((subcategory) => (
-            <SubcategoryCard 
-              key={subcategory.query} 
-              category={selectedCategoryData} 
-              subcategory={subcategory} 
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Services List */}
-      {showServicesList && (
+      
+      {filters.category && !showSubcategories && (
         <>
-          {/* Desktop Filters */}
-          <div className="hidden lg:block mb-8">
-            <Card>
+          <div className="hidden md:grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4 mb-8 p-6 bg-muted/50 dark:bg-muted/20 rounded-xl shadow">
+            <FilterControls 
+              filters={filters}
+              handleFilterChange={handleFilterChange}
+              updateUrl={updateUrl}
+              setFilters={setFilters}
+            />
+          </div>
+          <div className="hidden md:flex justify-end mb-8">
+            <Button variant="ghost" onClick={clearFiltersAndUrl} className="text-sm text-muted-foreground hover:text-primary">
+                <X className="w-4 h-4 mr-1" /> Clear All Filters
+            </Button>
+          </div>
+        </>
+      )}
+      
+      <Separator className="my-8" />
+
+      {isLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <Card key={i} className="overflow-hidden">
+              <Skeleton className="h-48 w-full" />
+              <CardContent className="p-4 space-y-3">
+                <Skeleton className="h-6 w-3/4 rounded" />
+                <Skeleton className="h-4 w-1/2 rounded" />
+                <Skeleton className="h-4 w-full rounded" />
+                <Skeleton className="h-4 w-2/3 rounded" />
+              </CardContent>
+              <CardFooter className="p-4 border-t">
+                 <Skeleton className="h-10 w-full rounded" />
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {!isLoading && showMainCategories && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          {serviceHierarchy.map((category) => (
+            <Link key={category.name} href={`/all-services?category=${category.query}`}>
+              <Card className="group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer h-full flex flex-col">
+                <CardHeader className="items-center text-center p-6">
+                  <div className={`p-4 rounded-full ${category.bgColor} mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                    <category.icon className={`h-10 w-10 ${category.color}`} />
+                  </div>
+                  <CardTitle className="font-headline text-xl">{category.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex-grow flex items-end justify-center p-4 pt-0">
+                  <Button variant="ghost" className="text-sm text-primary group-hover:underline">
+                    Explore <ArrowRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+      
+      {!isLoading && showSubcategories && selectedCategoryData && (
+        <div className="mb-12">
+            <h2 className="font-headline text-2xl font-semibold mb-6">Subcategories in {selectedCategoryData.name}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+              {selectedCategoryData.subcategories.map((subcategory) => (
+                <Link key={subcategory.name} href={`/all-services?category=${selectedCategoryData.query}&subcategory=${subcategory.query}`}>
+                  <Card className="group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer h-full flex flex-col">
+                    <CardHeader className="items-center text-center p-6 flex-grow">
+                        {subcategory.icon && (
+                          <div className={`p-3 rounded-full ${selectedCategoryData.bgColor} mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                            <subcategory.icon className={`h-8 w-8 ${subcategory.color || selectedCategoryData.color}`} />
+                          </div>
+                        )}
+                        <CardTitle className="font-headline text-lg">{subcategory.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-shrink-0 flex items-end justify-center p-4 pt-0">
+                      <Button variant="ghost" className="text-sm text-primary group-hover:underline">
+                        View Services <ArrowRight className="ml-1 h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </div>
+      )}
+
+      {!isLoading && showServicesList && (
+        <>
+          {services.length > 0 ? (
+            <div>
+              <h2 className="font-headline text-2xl font-semibold mb-6">Available Services</h2>
+              <div className="mb-4 text-sm text-muted-foreground">
+                Showing <span className="font-semibold text-foreground">{services.length}</span> service{services.length === 1 ? '' : 's'}.
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-8">
+                {services.map(service => (
+                  <ServiceCard key={service._id} service={service} />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <Card className="text-center py-16 shadow-md col-span-full">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ListFilter className="h-5 w-5" />
-                  Filters
-                </CardTitle>
+                <LayoutGrid className="mx-auto h-16 w-16 text-primary/50 mb-4" />
+                <CardTitle className="font-headline text-2xl">No Services Found</CardTitle>
               </CardHeader>
               <CardContent>
-                <FilterControls 
-                  filters={filters} 
-                  handleFilterChange={handleFilterChange} 
-                  updateUrl={updateUrl}
-                  setFilters={setFilters}
-                />
+                <p className="mt-2 text-muted-foreground">
+                  There are currently no services available matching your criteria.
+                </p>
               </CardContent>
+              <CardFooter className="justify-center">
+                <Button variant="outline" onClick={clearFiltersAndUrl}>
+                    <X className="w-4 h-4 mr-2" /> Clear Filters & View All Categories
+                </Button>
+              </CardFooter>
             </Card>
-          </div>
-
-          {/* Services Grid */}
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <CardHeader>
-                    <div className="h-4 bg-muted rounded w-3/4"></div>
-                    <div className="h-3 bg-muted rounded w-1/2"></div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-32 bg-muted rounded mb-4"></div>
-                    <div className="space-y-2">
-                      <div className="h-3 bg-muted rounded"></div>
-                      <div className="h-3 bg-muted rounded w-2/3"></div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : error ? (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">Failed to load services. Please try again.</p>
-                  <Button onClick={refreshServices} variant="outline">
-                    Retry
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : currentServices.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No services found for the selected criteria.</p>
-                  <Button onClick={clearFiltersAndUrl} variant="outline" className="mt-4">
-                    Clear Filters
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {currentServices.map((service: Service) => (
-                <ServiceCard 
-                  key={service.id} 
-                  service={service} 
-                  onActionComplete={refreshServices}
-                />
-              ))}
-            </div>
           )}
         </>
       )}
+
     </div>
   );
 }

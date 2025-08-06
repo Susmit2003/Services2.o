@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { TimeSlotSelector } from '@/components/custom/time-slot-selector';
 import { serviceHierarchy, currencySymbols } from '@/lib/constants';
-import { uploadImage } from '@/lib/actions/cloudinary.actions';
+import { uploadImage } from '@/lib/actions/cloudinary';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const MAX_ZIP_CODES = 5;

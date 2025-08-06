@@ -21,3 +21,22 @@ export const serviceSchema = z.object({
   description: z.string().min(20, { message: 'Description must be at least 20 characters.' }),
   price: z.number().positive({ message: 'Price must be a positive number.' }),
 });
+export const updateUserProfileSchema = z.object({
+  username: z.string().min(3, 'Username must be at least 3 characters long.'),
+  fullName: z.string().min(3, 'Full name must be at least 3 characters long.'),
+  email: z.string().email('Please enter a valid email address.'),
+  mobile: z.string().regex(/^\d{10,15}$/, 'Please enter a valid mobile number.'),
+  
+  // Address is an optional object
+  address: z.object({
+    line1: z.string().optional(),
+    city: z.string().optional(),
+    pinCode: z.string().optional(),
+  }).optional(),
+  
+  // Profile image is handled separately, so it's optional here.
+  profileImage: z.string().url('Invalid URL').optional().nullable(),
+});
+
+// This creates a TypeScript type from the Zod schema
+export type UpdateUserProfileParams = z.infer<typeof updateUserProfileSchema>;

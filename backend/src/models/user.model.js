@@ -1,6 +1,18 @@
 // backend/src/models/user.model.js
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs'; // <-- THIS LINE WAS MISSING
+import bcrypt from 'bcryptjs';
+
+const locationSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ['Point'],
+    default: 'Point',
+  },
+  coordinates: {
+    type: [Number], // [longitude, latitude]
+    index: '2dsphere', // <-- This creates the geospatial index
+  },
+});
 
 const addressSchema = mongoose.Schema({
     line1: { type: String, trim: true },
@@ -35,6 +47,14 @@ const userSchema = mongoose.Schema(
       enum: ['user', 'provider', 'admin'],
       default: 'user',
     },
+    // --- FIX: START ---
+    // Ensure that every new user is active by default at the database level.
+    isActive: {
+        type: Boolean,
+        default: true,
+    },
+     location: locationSchema, 
+    // --- FIX: END ---
     address: addressSchema,
     currency: {
         type: String,
@@ -56,18 +76,14 @@ const userSchema = mongoose.Schema(
 
 // Method to compare entered password with the hashed password in the database
 userSchema.methods.matchPassword = async function (enteredPassword) {
-  // 'this.password' refers to the hashed password of the user instance
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
 // Middleware to automatically hash the password before saving a new user
 userSchema.pre('save', async function (next) {
-  // Only run this function if the password was modified (or is new)
   if (!this.isModified('password')) {
     return next();
   }
-
-  // Hash the password
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
