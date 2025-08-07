@@ -1,85 +1,48 @@
-// backend/src/models/user.model.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 const locationSchema = new mongoose.Schema({
-  type: {
-    type: String,
-    enum: ['Point'],
-    default: 'Point',
-  },
-  coordinates: {
-    type: [Number], // [longitude, latitude]
-    index: '2dsphere', // <-- This creates the geospatial index
-  },
+  type: { type: String, enum: ['Point'], default: 'Point' },
+  coordinates: { type: [Number], required: true },
+}, { _id: false });
+
+const addressSchema = new mongoose.Schema({
+  line1: { type: String },
+  line2: { type: String },
+  city: { type: String },
+  pinCode: { type: String },
+  country: { type: String },
+}, { _id: false });
+
+const userSchema = new mongoose.Schema({
+  // --- FIX: Renamed mobileNumber to mobile ---
+  mobile: { type: String, required: true, unique: true },
+  
+  // Frontend sends 'name', and 'username' is required for the system
+  name: { type: String, required: true },
+  username: { type: String, required: true, unique: true, trim: true },
+  fullName: { type: String },
+  
+  password: { type: String, required: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+
+  profileImage: { type: String },
+  address: addressSchema,
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  location: { type: locationSchema, index: '2dsphere' },
+  walletBalance: { type: Number, default: 0 },
+  currency: { type: String, default: 'INR' },
+  lastLoginAt: { type: Date, default: Date.now },
+  monthlyFreeBookings: { type: Number, default: 10 },
+  dailyBookings: { type: Number, default: 0 },
+}, {
+  timestamps: true,
 });
 
-const addressSchema = mongoose.Schema({
-    line1: { type: String, trim: true },
-    city: { type: String, trim: true },
-    pinCode: { type: String, trim: true },
-});
-
-const userSchema = mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-    },
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-    },
-    mobile: {
-      type: String,
-      required: true,
-      unique: true,
-    },
-    password: {
-      type: String,
-      required: true,
-    },
-    role: {
-      type: String,
-      enum: ['user', 'provider', 'admin'],
-      default: 'user',
-    },
-    // --- FIX: START ---
-    // Ensure that every new user is active by default at the database level.
-    isActive: {
-        type: Boolean,
-        default: true,
-    },
-     location: locationSchema, 
-    // --- FIX: END ---
-    address: addressSchema,
-    currency: {
-        type: String,
-        default: 'INR'
-    },
-    walletBalance: {
-        type: Number,
-        default: 0
-    },
-    profileImage: {
-        type: String,
-        default: ''
-    }
-  },
-  {
-    timestamps: true,
-  }
-);
-
-// Method to compare entered password with the hashed password in the database
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Middleware to automatically hash the password before saving a new user
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     return next();

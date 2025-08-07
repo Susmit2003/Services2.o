@@ -3,29 +3,37 @@ import {
   createBooking, 
   getUserBookings, 
   getProviderBookings,
-  updateBookingStatus,
-  getUnavailableSlots
+  getUnavailableSlots,
+  cancelBookingAsUser,
+  acceptBooking,
+  declineBooking,
+  verifyAndStartService,
+  completeService,
+  markAsIncomplete,
+  addProviderFeedback,
 } from '../controllers/booking.controller.js';
 import { protect } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// All routes require authentication
+// All routes below require an authenticated user
 router.use(protect);
 
-// POST /api/bookings/create
-router.post('/create', createBooking);
-
-// GET /api/bookings/user
-router.get('/user', getUserBookings);
-
-// GET /api/bookings/provider
-router.get('/provider', getProviderBookings);
-
-// PUT /api/bookings/:bookingId/status
-router.put('/:bookingId/status', updateBookingStatus);
-
-// GET /api/bookings/unavailable-slots
+// --- Publicly accessible after auth ---
 router.get('/unavailable-slots', getUnavailableSlots);
+
+// --- User-specific routes ---
+router.get('/user', getUserBookings);
+router.post('/create', createBooking);
+router.post('/:bookingId/cancel-user', cancelBookingAsUser);
+
+// --- Provider-specific routes ---
+router.get('/provider', getProviderBookings);
+router.put('/:bookingId/accept', acceptBooking);
+router.put('/:bookingId/decline', declineBooking);
+router.put('/:bookingId/start', verifyAndStartService);
+router.put('/:bookingId/complete', completeService);
+router.put('/:bookingId/incomplete', markAsIncomplete);
+router.post('/:bookingId/provider-feedback', addProviderFeedback);
 
 export default router;

@@ -2,87 +2,71 @@ import User from '../models/user.model.js';
 import bcrypt from 'bcryptjs';
 import { generateToken } from '../utils/jwt.utils.js';
 import crypto from 'crypto';
+import asyncHandler from 'express-async-handler';
 
-export const signup = async (req, res) => {
+
+export const signup = asyncHandler(async (req, res) => {
   const { name, mobile, password, email } = req.body;
-  try {
-    const existingUser = await User.findOne({ mobile });
-    if (existingUser) {
-      return res.status(409).json({ message: 'Mobile number already registered.' });
-    }
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    const newUser = await User.create({
-      name,
-      mobile,
-      email,
-      password: hashedPassword,
-    });
-    const token = generateToken(newUser._id);
-    res.status(201).json({
-      message: 'Signup successful',
-      token,
-      user: {
-        id: newUser._id,
-        name: newUser.name,
-        mobile: newUser.mobile,
-        email: newUser.email,
-        role: newUser.role,
-      }
-    });
-  } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).json({ message: 'Server error during signup' });
-  }
-};
 
-export const login = async (req, res) => {
-  const { mobile, password } = req.body;
+  // --- FIX: Automatically generate a unique username ---
+  // 1. Create a base username from the email address
+  let baseUsername = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+  // 2. Add random characters to ensure it's unique
+  const randomSuffix = crypto.randomBytes(2).toString('hex');
+  const finalUsername = `${baseUsername}${randomSuffix}`;
   
-  try {
-    // Find user by mobile
-    const user = await User.findOne({ mobile });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials.' });
-    }
+  const existingUser = await User.findOne({ $or: [{ mobile }, { email }] });
+  if (existingUser) {
+    res.status(409);
+    throw new Error('User with this email or mobile number already exists.');
+  }
 
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials.' });
-    }
+  const user = await User.create({
+    name,
+    username: finalUsername, // Use the generated username
+    mobile, // Use the 'mobile' field from the form
+    email,
+    password,
+  });
 
-    // Check if user is active
-    if (!user.isActive) {
-      return res.status(401).json({ message: 'Account is deactivated.' });
-    }
+  if (user) {
+    res.status(201).json({
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      mobile: user.mobile,
+      email: user.email,
+      role: user.role,
+      token: generateToken(user._id),
+    });
+  } else {
+    res.status(500);
+    throw new Error('User could not be created.');
+  }
+});
 
-    // Generate token
-    const token = generateToken(user._id);
+export const login = asyncHandler(async (req, res) => {
+  const { identifier, password } = req.body;
+  
+  const user = await User.findOne({ 
+    $or: [{ email: identifier }, { mobile: identifier }, { username: identifier }] 
+  }).select('+password');
 
-    // Return user data (excluding password)
-    const userResponse = {
-      id: user._id,
+  if (user && (await user.matchPassword(password))) {
+    res.json({
+      _id: user._id,
       name: user.name,
       email: user.email,
       mobile: user.mobile,
       role: user.role,
-      currency: user.currency,
-      address: user.address,
-      freeTransactionsUsed: user.freeTransactionsUsed,
-      dailyBookings: user.dailyBookings
-    };
-
-    res.status(200).json({ 
-      message: 'Login successful',
-      token, 
-      user: userResponse 
+      token: generateToken(user._id),
     });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error during login' });
+  } else {
+    res.status(401);
+    throw new Error('Invalid credentials');
   }
-};
+});
+
 
 export const forgotPassword = async (req, res) => {
   const { mobile } = req.body;

@@ -1,9 +1,8 @@
 import { ServicesPageClient } from '@/components/custom/services-page-client';
-import { getAllServices } from '@/lib/actions/service.actions'; // <-- Correct import
-import { serviceHierarchy } from '@/lib/constants';
-import type { Service, ServiceCategory } from '@/types';
+import { getAllServices } from '@/lib/actions/service.actions';
+import type { Service } from '@/types'; // ServiceCategory is no longer needed here
 
-// This is a Server Component, so it's async
+// This is a Server Component that fetches data based on URL query parameters
 export default async function ServicesPage({
   searchParams,
 }: {
@@ -12,38 +11,31 @@ export default async function ServicesPage({
 
   // Parse filters from the URL search parameters
   const filters = {
-    category: searchParams?.category as string || '',
-    subcategory: searchParams?.subcategory as string || '',
-    searchTerm: searchParams?.searchTerm as string || '',
-    pincode: searchParams?.pincode as string || '',
-    rating: searchParams?.rating as string || '',
+    category: (searchParams?.category as string) || '',
+    subcategory: (searchParams?.subcategory as string) || '',
+    searchTerm: (searchParams?.searchTerm as string) || '',
+    pincode: (searchParams?.pincode as string) || '',
+    rating: (searchParams?.rating as string) || '',
   };
 
   let initialServices: Service[] = [];
-  let initialCategories: ServiceCategory[] = [];
-  let isLoading = true;
-
+  
   try {
-    // --- FIX: Call the correct function name 'getAllServices' ---
-    const { services, categories } = await getAllServices(filters);
+    // --- FIX: Fetch only the services, not the categories ---
+    // The backend still sends categories, but we'll just ignore them here.
+    const { services } = await getAllServices(filters);
     initialServices = services;
-    initialCategories = categories;
   } catch (error) {
-    console.error("Failed to fetch initial services:", error);
-    // On error, we pass empty arrays to the client component to prevent crashes.
+    console.error("Failed to fetch services:", error);
     initialServices = [];
-    initialCategories = [];
-  } finally {
-    isLoading = false;
   }
 
-  // The client component handles all interactivity (filtering, sorting, etc.)
+  // --- FIX: Remove the 'categories' prop from the component ---
+  // Pass only the necessary data to the client component.
   return (
     <ServicesPageClient
       initialServices={initialServices}
       initialFilters={filters}
-      categories={initialCategories}
-      isLoading={isLoading}
     />
   );
 }

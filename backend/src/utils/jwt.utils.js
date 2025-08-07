@@ -1,8 +1,13 @@
-// backend/src/utils/jwt.utils.js
 import jwt from 'jsonwebtoken';
 
-// Define the secret key in one place. Use a more complex key in production.
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-2024';
+// --- FIX: Remove the fallback value to ensure the .env secret is always used ---
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// This check will cause the server to stop immediately if the secret is not configured,
+// which is much safer than using a default key.
+if (!JWT_SECRET) {
+  throw new Error('FATAL ERROR: JWT_SECRET is not defined in the .env file.');
+}
 
 /**
  * Generates a JWT for a given user ID.
@@ -11,7 +16,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-here-202
  */
 export const generateToken = (id) => {
   return jwt.sign({ id }, JWT_SECRET, {
-    expiresIn: '30d', // Token will expire in 30 days
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 };
 
