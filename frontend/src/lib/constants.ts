@@ -150,3 +150,5 @@ export const currencySymbols: { [key: string]: string } = {
   'MYR': 'RM', 'THB': '฿', 'IDR': 'Rp', 'VND': '₫', 'PHP': '₱', 'KRW': '₩', 'HKD': '$',
   'NGN': '₦', 'KES': 'KSh', 'NZD': '$'
 };
+
+export const FREE_TRANSACTION_LIMIT = 10;

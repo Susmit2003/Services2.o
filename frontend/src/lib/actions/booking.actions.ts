@@ -63,15 +63,7 @@ export async function getProviderBookings(): Promise<Booking[]> {
  * @param date The date to check for availability.
  * @returns An array of unavailable time slot strings.
  */
-export async function getUnavailableSlots(serviceId: string, date: Date) {
-  try {
-    const dateString = date.toISOString().split('T')[0];
-    const response = await apiClient.get(`/bookings/unavailable-slots?serviceId=${serviceId}&date=${dateString}`);
-    return response.data;
-  } catch (error: any) { // --- FIX: Corrected typo from '_ ' to nothing ---
-    throw new Error(error.response?.data?.message || 'Failed to fetch unavailable slots.');
-  }
-}
+
 
 /**
  * Allows a user to cancel a booking they have made.
@@ -168,3 +160,17 @@ export async function markAsIncomplete(bookingId: string, reason: string) {
         return { error: error.response?.data?.message || 'Failed to mark booking as incomplete.' };
     }
 }
+
+
+export const getUnavailableSlots = async (serviceId: string, date: Date): Promise<string[]> => {
+    try {
+        const response = await apiClient.get('/bookings/unavailable-slots', {
+            params: { serviceId, date: date.toISOString() }
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Failed to fetch unavailable slots:", error);
+        return [];
+    }
+};
+

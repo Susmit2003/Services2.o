@@ -1,86 +1,29 @@
-// frontend/src/hooks/use-bookings.ts
-import useSWR, { mutate } from 'swr';
-import { swrKeys } from '@/lib/swr-config';
-import apiClient from '@/lib/api';
+"use client";
+
+import { useSWRConfig } from 'swr';
+import { createBooking } from '@/lib/actions/booking.actions';
 import type { Booking } from '@/types';
 
-// Hook to get user bookings
-export const useUserBookings = () => {
-  const { data: bookings, error, isLoading, mutate: refreshBookings } = useSWR<Booking[]>(
-    swrKeys.userBookings,
-    null,
-    {
-      revalidateOnFocus: false, // Don't revalidate on focus for bookings
-      refreshInterval: 0, // Don't auto-refresh
-    }
-  );
+// This custom hook manages booking data with optimistic UI updates.
+export function useBookings() {
+    const { mutate } = useSWRConfig();
 
-  return {
-    bookings: bookings || [],
-    isLoading,
-    error,
-    refreshBookings
-  };
-};
+    // The component is trying to import this specific function.
+    const createBookingOptimistic = async (bookingData: any) => {
+        try {
+            // Call the actual server action to create the booking.
+            await createBooking(bookingData);
+            
+            // Immediately refetch the user's bookings to show the new one in their dashboard.
+            // The key '/api/bookings/user' should match the SWR key used to fetch user bookings.
+            mutate('/api/bookings/user');
 
-// Hook to get provider bookings
-export const useProviderBookings = () => {
-  const { data: bookings, error, isLoading, mutate: refreshBookings } = useSWR<Booking[]>(
-    swrKeys.providerBookings,
-    null,
-    {
-      revalidateOnFocus: false,
-      refreshInterval: 0,
-    }
-  );
+        } catch (error) {
+            console.error("Optimistic booking creation failed:", error);
+            // Re-throw the error so the component's error handling can catch it.
+            throw error;
+        }
+    };
 
-  return {
-    bookings: bookings || [],
-    isLoading,
-    error,
-    refreshBookings
-  };
-};
-
-// Optimistic booking status update
-export const updateBookingStatusOptimistic = async (bookingId: string, newStatus: string) => {
-  try {
-    // Optimistically update the user bookings cache
-    await mutate(
-      swrKeys.userBookings,
-      (currentBookings: Booking[] = []) =>
-        currentBookings.map(booking =>
-          booking.id === bookingId
-            ? { ...booking, status: newStatus as Booking['status'], updatedAt: new Date().toISOString() }
-            : booking
-        ),
-      false
-    );
-
-    // Also update provider bookings cache
-    await mutate(
-      swrKeys.providerBookings,
-      (currentBookings: Booking[] = []) =>
-        currentBookings.map(booking =>
-          booking.id === bookingId
-            ? { ...booking, status: newStatus as Booking['status'], updatedAt: new Date().toISOString() }
-            : booking
-        ),
-      false
-    );
-
-    // Make the actual API call
-    const response = await apiClient.put(`/bookings/${bookingId}/status`, { status: newStatus });
-
-    // Revalidate both caches to ensure data consistency
-    await mutate(swrKeys.userBookings);
-    await mutate(swrKeys.providerBookings);
-
-    return response.data;
-  } catch (error) {
-    // Revalidate on error to revert the optimistic update
-    await mutate(swrKeys.userBookings);
-    await mutate(swrKeys.providerBookings);
-    throw error;
-  }
-};
+    return { createBookingOptimistic };
+}
