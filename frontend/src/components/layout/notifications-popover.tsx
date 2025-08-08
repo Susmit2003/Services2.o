@@ -1,101 +1,83 @@
 "use client";
 
-import { useState } from "react";
-import { Bell } from "lucide-react";
+import { useState, useEffect } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { NotificationList } from "@/components/custom/notification-list";
-import { useAuth } from "@/context/auth-context";
-import useSWR, { mutate } from "swr";
-import { getUserNotifications, markAllNotificationsAsRead } from "@/lib/actions/notification.actions";
-import { swrKeys } from "@/lib/swr-config";
-import { useToast } from "@/hooks/use-toast";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import type { Notification } from "@/types"; // <-- Import the Notification type
+import { Bell, BellRing, BellOff } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { getNotifications, markAllNotificationsAsRead } from "@/lib/actions/notification.actions"; // <-- FIX: Import the correct function name
+import type { Notification } from "@/types";
+import { useAuth } from '@/context/auth-context';
+import { FormattedDate } from '../custom/FormattedDate';
+import { useRouter } from 'next/navigation';
 
 export function NotificationsPopover() {
-  const { isLoggedIn } = useAuth();
-  const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
+    const { isLoggedIn } = useAuth();
+    const router = useRouter();
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
 
-  // We can also give useSWR a hint about the expected data type
-  const { data: notifications, error, isLoading } = useSWR<Notification[]>(
-    isLoggedIn ? swrKeys.notifications : null,
-    getUserNotifications
-  );
+    useEffect(() => {
+        if (isLoggedIn) {
+            // --- FIX: Call the correct function name ---
+            getNotifications().then(data => {
+                setNotifications(data);
+                setUnreadCount(data.filter(n => !n.isRead).length);
+            });
+        }
+    }, [isLoggedIn]);
 
-  // --- FIX: Add the 'Notification' type to the parameter 'n' ---
-  const unreadCount = notifications?.filter((n: Notification) => !n.isRead).length || 0;
+    const handleMarkAllRead = async () => {
+        await markAllNotificationsAsRead();
+        setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+        setUnreadCount(0);
+        router.refresh(); // Refreshes data on other pages
+    };
 
-  const handleMarkAllAsRead = async () => {
-    if (unreadCount === 0) return;
-
-    try {
-      // --- FIX: Add the 'Notification' type to the parameter 'n' here as well ---
-      const updatedNotifications = notifications?.map((n: Notification) => ({ ...n, isRead: true }));
-      
-      mutate(swrKeys.notifications, updatedNotifications, false);
-      
-      await markAllNotificationsAsRead();
-      mutate(swrKeys.notifications);
-
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "Could not mark notifications as read.",
-        variant: "destructive",
-      });
-      mutate(swrKeys.notifications);
+    if (!isLoggedIn) {
+        return null; // Don't show the popover if the user is not logged in
     }
-  };
-  
-  if (!isLoggedIn) {
-    return null;
-  }
-
-  return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
+    
+    return (
+        <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
-                    {unreadCount}
-                  </span>
-                )}
-              </Button>
+                <Button variant="ghost" size="icon" className="relative">
+                    <Bell className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                        <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary animate-pulse" />
+                    )}
+                </Button>
             </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Notifications</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
-      <PopoverContent className="w-80 p-0">
-        <div className="flex items-center justify-between p-4 font-medium border-b">
-          <h4>Notifications</h4>
-          {unreadCount > 0 && (
-            <Button variant="link" size="sm" className="p-0 h-auto" onClick={handleMarkAllAsRead}>
-              Mark all as read
-            </Button>
-          )}
-        </div>
-        <NotificationList
-          notifications={notifications}
-          isLoading={isLoading}
-          error={error}
-          onClose={() => setIsOpen(false)}
-        />
-      </PopoverContent>
-    </Popover>
-  );
+            <PopoverContent className="w-80" align="end">
+                <Card className="border-none shadow-none">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="font-headline text-lg">Notifications</CardTitle>
+                        {unreadCount > 0 && (
+                            <Button variant="link" size="sm" onClick={handleMarkAllRead}>Mark all as read</Button>
+                        )}
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {notifications.length > 0 ? (
+                            <div className="flex flex-col gap-2 max-h-96 overflow-y-auto p-2">
+                                {notifications.map(notif => (
+                                    <div key={notif._id} className={`p-3 rounded-lg ${!notif.isRead ? 'bg-primary/10' : ''}`}>
+                                        <p className="font-semibold flex items-center gap-2">
+                                            <BellRing className="h-4 w-4 text-primary" /> {notif.title}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">{notif.message}</p>
+                                        <p className="text-xs text-muted-foreground mt-1"><FormattedDate date={notif.createdAt} /></p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center p-8">
+                                <BellOff className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                                <p className="text-muted-foreground">You have no notifications.</p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </PopoverContent>
+        </Popover>
+    );
 }

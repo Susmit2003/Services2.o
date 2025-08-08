@@ -152,3 +152,6 @@ export const currencySymbols: { [key: string]: string } = {
 };
 
 export const FREE_TRANSACTION_LIMIT = 10;
+
+export const CANCELLATION_FEE = 20;
+

@@ -1,104 +1,81 @@
-
-import type { Booking } from '@/types';
-import { getProviderBookings } from '@/lib/actions/booking.actions';
-import { getUserProfile } from '@/lib/actions/user.actions';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { ListOrdered, CalendarX2 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ProviderBookingCard } from '@/components/custom/provider-booking-card';
+import { getProviderBookings } from "@/lib/actions/booking.actions";
+import { ProviderBookingCard } from "@/components/custom/provider-booking-card";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CalendarOff } from "lucide-react";
+import type { Booking } from "@/types";
 
 export default async function ProviderSchedulePage() {
-    const user = await getUserProfile();
-
-    if (!user) {
-        return (
-            <Card className="text-center py-12 shadow-md">
-                <CardHeader>
-                    <ListOrdered className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                    <CardTitle className="font-headline text-2xl">Login Required</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <CardDescription>You need to be logged in to view your provider schedule.</CardDescription>
-                </CardContent>
-            </Card>
-        );
+    let bookings: Booking[] = [];
+    try {
+        bookings = await getProviderBookings();
+    } catch (error) {
+        console.error("Failed to fetch provider bookings:", error);
     }
 
-    const bookings: Booking[] = await getProviderBookings();
-
-    if (bookings.length === 0) {
-        return (
-            <Card className="text-center py-12 shadow-md">
-                <CardHeader>
-                    <CalendarX2 className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-                    <CardTitle className="font-headline text-2xl">No Bookings Found</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <CardDescription>You do not have any bookings from customers yet. Make sure your services are active and visible.</CardDescription>
-                </CardContent>
-            </Card>
-        );
-    }
-    
-    const requestedBookings = bookings.filter(b => b.status === 'Requested');
-    const acceptedBookings = bookings.filter(b => b.status === 'Accepted');
-    const inProgressBookings = bookings.filter(b => b.status === 'InProgress');
-    const pendingFeedbackBookings = bookings.filter(b => b.status === 'Completed' && !b.providerFeedback);
-    const completedBookings = bookings.filter(b => b.status === 'Completed' && !!b.providerFeedback);
-    const cancelledBookings = bookings.filter(b => b.status === 'Cancelled');
-
-
-    const renderBookingList = (list: Booking[], emptyMessage: string) => {
-        if (list.length === 0) {
-            return <p className="text-muted-foreground text-center py-8">{emptyMessage}</p>;
-        }
-        return (
-            <div className="space-y-6">
-                {list.map(booking => (
-                    <ProviderBookingCard key={booking.id} booking={booking} />
-                ))}
-            </div>
-        );
-    };
+    const pending = bookings.filter(b => b.status === 'pending');
+    const active = bookings.filter(b => b.status === 'confirmed' || b.status === 'in-progress');
+    const completed = bookings.filter(b => b.status === 'completed' || b.status === 'incompleted' || b.status === 'rejected' || b.status === 'cancelled');
 
     return (
-        <div className="container mx-auto py-8">
-            <div className="mb-8">
-                <h1 className="font-headline text-2xl md:text-3xl font-bold">Provider Schedule</h1>
-                <p className="text-muted-foreground">Manage all your customer bookings from here.</p>
-            </div>
+        <div className="space-y-8"> 
+            <header>
+                <h1 className="font-headline text-4xl font-bold">Your Booking Schedule</h1>
+                <p className="mt-2 text-lg text-muted-foreground">
+                    Manage your incoming service requests and view your appointments.
+                </p>
+            </header>
             
-            <Tabs defaultValue="requested">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6 h-auto">
-                    <TabsTrigger value="requested">New Requests ({requestedBookings.length})</TabsTrigger>
-                    <TabsTrigger value="accepted">Upcoming ({acceptedBookings.length})</TabsTrigger>
-                    <TabsTrigger value="inProgress">In Progress ({inProgressBookings.length})</TabsTrigger>
-                    <TabsTrigger value="pendingFeedback">Needs Feedback ({pendingFeedbackBookings.length})</TabsTrigger>
-                    <TabsTrigger value="completed">Completed ({completedBookings.length})</TabsTrigger>
-                    <TabsTrigger value="cancelled">Cancelled ({cancelledBookings.length})</TabsTrigger>
+            <Tabs defaultValue="pending" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="pending">Pending Requests ({pending.length})</TabsTrigger>
+                    <TabsTrigger value="active">Active & Upcoming ({active.length})</TabsTrigger>
+                    <TabsTrigger value="completed">History ({completed.length})</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="requested" className="mt-6">
-                    {renderBookingList(requestedBookings, "You have no new booking requests.")}
+                <TabsContent value="pending" className="mt-6">
+                    {pending.length > 0 ? (
+                        <div className="flex flex-col gap-6">
+                            {pending.map((booking) => ( <ProviderBookingCard key={booking.id} booking={booking} /> ))}
+                        </div>
+                    ) : (
+                        <EmptyState title="No Pending Requests" description="New booking requests from customers will appear here." />
+                    )}
                 </TabsContent>
-                <TabsContent value="accepted" className="mt-6">
-                    {renderBookingList(acceptedBookings, "No upcoming bookings.")}
+
+                <TabsContent value="active" className="mt-6">
+                    {active.length > 0 ? (
+                        <div className="flex flex-col gap-6">
+                            {active.map((booking) => ( <ProviderBookingCard key={booking.id} booking={booking} /> ))}
+                        </div>
+                    ) : (
+                        <EmptyState title="No Active Bookings" description="Accepted bookings and services in progress will be shown here." />
+                    )}
                 </TabsContent>
-                <TabsContent value="inProgress" className="mt-6">
-                    {renderBookingList(inProgressBookings, "No services are currently in progress.")}
-                </TabsContent>
-                <TabsContent value="pendingFeedback" className="mt-6">
-                    {renderBookingList(pendingFeedbackBookings, "No completed services are awaiting your feedback.")}
-                </TabsContent>
+
                 <TabsContent value="completed" className="mt-6">
-                    {renderBookingList(completedBookings, "No bookings have been completed yet.")}
-                </TabsContent>
-                <TabsContent value="cancelled" className="mt-6">
-                    {renderBookingList(cancelledBookings, "You have no cancelled bookings.")}
+                    {completed.length > 0 ? (
+                        <div className="flex flex-col gap-6">
+                            {completed.map((booking) => ( <ProviderBookingCard key={booking.id} booking={booking} /> ))}
+                        </div>
+                    ) : (
+                        <EmptyState title="No Completed Bookings" description="Your past services will be listed here." />
+                    )}
                 </TabsContent>
             </Tabs>
         </div>
     );
 }
+
+// Helper component for empty states
+const EmptyState = ({ title, description }: { title: string, description: string }) => (
+    <div className="flex items-center justify-center h-full py-16">
+        <Card className="text-center w-full max-w-lg p-8">
+            <CardHeader>
+                <CalendarOff className="mx-auto h-16 w-16 text-muted-foreground/50 mb-4" />
+                <CardTitle className="font-headline text-2xl">{title}</CardTitle>
+                <CardDescription>{description}</CardDescription>
+            </CardHeader>
+        </Card>
+    </div>
+);

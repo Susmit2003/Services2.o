@@ -15,17 +15,12 @@ const addressSchema = new mongoose.Schema({
 }, { _id: false });
 
 const userSchema = new mongoose.Schema({
-  // --- FIX: Renamed mobileNumber to mobile ---
   mobile: { type: String, required: true, unique: true },
-  
-  // Frontend sends 'name', and 'username' is required for the system
   name: { type: String, required: true },
   username: { type: String, required: true, unique: true, trim: true },
   fullName: { type: String },
-  
-  password: { type: String, required: true },
+  password: { type: String, required: true, select: false }, // Hide password by default
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-
   profileImage: { type: String },
   address: addressSchema,
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
@@ -35,14 +30,17 @@ const userSchema = new mongoose.Schema({
   lastLoginAt: { type: Date, default: Date.now },
   monthlyFreeBookings: { type: Number, default: 10 },
   dailyBookings: { type: Number, default: 0 },
+  fcmToken: { type: String },
 }, {
   timestamps: true,
 });
 
+// Method to compare entered password with the hashed password
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
+// Middleware to automatically hash the password before saving a new user
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     return next();

@@ -1,45 +1,35 @@
-// frontend/src/app/dashboard/page.tsx
 "use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { Loader2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Loader2 } from 'lucide-react';
 
 export default function DashboardPage() {
-    const { currentUser, isLoggedIn, isLoading } = useAuth();
-    const router = useRouter();
+    const { currentUser } = useAuth();
     
-    useEffect(() => {
-        // Only perform the check once loading is complete
-        if (!isLoading && !isLoggedIn) {
-            console.log("Dashboard auth check: User not logged in, redirecting.");
-            router.push('/login');
-        }
-    }, [isLoggedIn, isLoading, router]);
-
-    // Display a loading spinner while the auth state is being determined
-    if (isLoading || !isLoggedIn) {
+    // The layout now guarantees that if this page renders, the user is logged in.
+    // We just show a loader while the currentUser data is being hydrated.
+    if (!currentUser) {
         return (
             <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <Loader2 className="h-10 w-10 animate-spin" />
             </div>
         );
     }
     
-    // Once checks pass, render the dashboard content
     return (
-        <div className="container mx-auto py-8">
+        <div className="space-y-8">
+            <header>
+                <h1 className="font-headline text-4xl font-bold">Welcome, {currentUser.name}!</h1>
+                <p className="text-lg text-muted-foreground">Here is an overview of your account.</p>
+            </header>
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-3xl font-headline">Welcome to your Dashboard, {currentUser?.name}!</CardTitle>
-                    <CardDescription>Here's an overview of your activity.</CardDescription>
+                    <CardTitle>Your Details</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p>You are logged in as: {currentUser?.email}</p>
-                    <p>Your role is: {currentUser?.role}</p>
-                    {/* Add more dashboard components here */}
+                    <p>Email: {currentUser.email}</p>
+                    <p>Mobile: {currentUser.mobile}</p>
                 </CardContent>
             </Card>
         </div>

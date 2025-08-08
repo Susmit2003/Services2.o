@@ -1,84 +1,166 @@
 import asyncHandler from 'express-async-handler';
-import Booking from '../models/booking.model.js';
+import Booking from '../models/booking.model.js'; // <-- This line fixes the "Booking is not defined" error
 import Service from '../models/service.model.js';
 import User from '../models/user.model.js';
 import Transaction from '../models/transaction.model.js';
 import { createNotification } from './notification.controller.js';
 import crypto from 'crypto';
 
-// --- Constants ---
+// --- Fee Constants ---
+const PLATFORM_FEE_PERCENTAGE = 0.10; // 10%
+const CANCELLATION_FEE = 20;
 const CANCELLATION_FEE_TO_PROVIDER = 15;
+const CANCELLATION_FEE_TO_PLATFORM = 5;
+
+// --- CREATE BOOKING ---
+export const createBooking = asyncHandler(async (req, res) => {
+  const { serviceId, bookingDate, timeSlot, address, totalPrice, currency } = req.body;
+  const user = req.user;
+
+  if (!address || !address.line1 || !address.city || !address.pinCode) {
+      res.status(400);
+      throw new Error("A complete address is required to create a booking.");
+  }
+
+  const service = await Service.findById(serviceId);
+  if (!service) { res.status(404); throw new Error('Service not found'); }
+  
+  const booking = await Booking.create({
+    user: user._id,
+    service: serviceId,
+    provider: service.providerId,
+    bookingDate,
+    timeSlot,
+    totalPrice,
+    currency,
+    address,
+  });
+
+  await createNotification(
+    service.providerId,
+    'New Booking Request',
+    `${user.name} has requested your service: "${service.title}".`,
+    'booking'
+  );
+
+  res.status(201).json(booking);
+});
+
+// --- ACCEPT BOOKING (WITH FEE LOGIC) ---
+export const acceptBooking = asyncHandler(async (req, res) => {
+    const { bookingId } = req.params;
+    const provider = req.user;
+
+    const booking = await Booking.findById(bookingId).populate('user service');
+    if (!booking || booking.provider.toString() !== provider._id.toString() || booking.status !== 'pending') {
+        res.status(400); throw new Error('Invalid booking or action not allowed.');
+    }
+
+    if (provider.monthlyFreeBookings > 0) {
+        await User.findByIdAndUpdate(provider._id, { $inc: { monthlyFreeBookings: -1 } });
+    } else {
+        const platformFee = booking.totalPrice * PLATFORM_FEE_PERCENTAGE;
+
+        if (provider.walletBalance < platformFee) {
+            res.status(402);
+            throw new Error(`Insufficient balance. You need ₹${platformFee.toFixed(2)} to accept.`);
+        }
+
+        await User.findByIdAndUpdate(provider._id, { $inc: { walletBalance: -platformFee } });
+        await Transaction.create({
+            user: provider._id, type: 'booking_fee', amount: -platformFee,
+            description: `10% platform fee for booking #${bookingId.slice(-6)}`,
+            relatedBooking: bookingId, currency: provider.currency
+        });
+    }
+    
+    booking.status = 'confirmed';
+    booking.serviceVerificationCode = crypto.randomInt(100000, 999999).toString();
+    const updatedBooking = await booking.save();
+    
+    await createNotification(booking.user._id, 'Booking Confirmed!', `Your booking for "${booking.service.title}" is confirmed.`, 'booking');
+    
+    res.json(updatedBooking);
+});
+
+
+
+
+
+
+
+
+
+// --- REJECT BOOKING ---
+export const declineBooking = asyncHandler(async (req, res) => {
+    const { bookingId } = req.params;
+    const { reason } = req.body;
+
+    const booking = await Booking.findById(bookingId).populate('user service');
+    if (!booking || booking.provider.toString() !== req.user._id.toString() || booking.status !== 'pending') {
+        res.status(400); throw new Error('Invalid booking or action not allowed.');
+    }
+
+    booking.status = 'rejected';
+    if (reason) booking.providerNotes = `Declined: ${reason}`;
+    const updatedBooking = await booking.save();
+    await createNotification(booking.user._id, 'Booking Declined', `Your booking for "${booking.service.title}" was declined.`, 'booking');
+    
+    res.json(updatedBooking);
+});
+
+// --- CANCEL BOOKING (WITH FEE LOGIC) ---
+export const cancelBookingAsUser = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  const user = req.user;
+  
+  const booking = await Booking.findById(bookingId).populate('provider service');
+  if (!booking || booking.user.toString() !== user._id.toString() || booking.status !== 'confirmed') {
+      res.status(400); throw new Error('Only confirmed bookings can be cancelled.');
+  }
+
+  if (user.walletBalance < CANCELLATION_FEE) {
+      res.status(402);
+      throw new Error(`Insufficient balance. You need ₹${CANCELLATION_FEE} to cancel.`);
+  }
+
+  await User.findByIdAndUpdate(user._id, { $inc: { walletBalance: -CANCELLATION_FEE } });
+  await Transaction.create({
+    user: user._id, type: 'cancellation_fee_debit', amount: -CANCELLATION_FEE,
+    description: `Cancellation fee for booking #${bookingId.slice(-6)}`,
+    relatedBooking: bookingId, currency: user.currency,
+  });
+
+  await User.findByIdAndUpdate(booking.provider._id, { $inc: { walletBalance: CANCELLATION_FEE_TO_PROVIDER } });
+  await Transaction.create({
+    user: booking.provider._id, type: 'cancellation_fee_credit', amount: CANCELLATION_FEE_TO_PROVIDER,
+    description: `Fee from cancelled booking #${bookingId.slice(-6)}`,
+    relatedBooking: bookingId, currency: booking.provider.currency,
+  });
+
+  console.log(`Platform earned ₹${CANCELLATION_FEE_TO_PLATFORM} from cancellation of booking ${bookingId}`);
+
+  booking.status = 'cancelled';
+  booking.cancelledBy = 'user';
+  booking.cancelledAt = new Date();
+  const updatedBooking = await booking.save();
+  
+  await createNotification(booking.provider._id, 'Booking Cancelled', `${user.name} cancelled their booking.`, 'booking');
+  
+  res.json({ message: 'Booking cancelled successfully.', booking: updatedBooking });
+});
+
+
+
+
+
+
+
+
+// --- Constants ---
+
 const PROVIDER_PLATFORM_FEE_PERCENTAGE = 0.10;
 
-/**
- * @desc    Create a new booking
- * @route   POST /api/bookings/create
- * @access  Private
- */
-export const createBooking = asyncHandler(async (req, res) => {
-    const {
-        serviceId,
-        bookingDate,
-        timeSlot,
-        address
-    } = req.body;
-    const userId = req.user._id;
-
-    if (!serviceId || !bookingDate || !timeSlot || !address) {
-        res.status(400);
-        throw new Error('Missing required booking information.');
-    }
-
-    const service = await Service.findById(serviceId);
-    if (!service) {
-        res.status(404);
-        throw new Error('Service not found.');
-    }
-    if (service.status !== 'Active') {
-        res.status(400);
-        throw new Error('This service is currently unavailable for booking.');
-    }
-    if (service.providerId.toString() === userId.toString()) {
-        res.status(400);
-        throw new Error('Providers cannot book their own services.');
-    }
-
-    const existingBooking = await Booking.findOne({
-        service: serviceId,
-        bookingDate: new Date(bookingDate),
-        timeSlot,
-        status: { $in: ['pending', 'confirmed', 'in-progress'] }
-    });
-
-    if (existingBooking) {
-        res.status(409); // Conflict
-        throw new Error('This time slot is already booked for the selected date.');
-    }
-
-    const booking = new Booking({
-        user: userId,
-        service: serviceId,
-        provider: service.providerId,
-        bookingDate: new Date(bookingDate),
-        timeSlot,
-        totalPrice: service.price,
-        address,
-        status: 'pending',
-    });
-
-    const createdBooking = await booking.save();
-
-    await createNotification(
-        service.providerId,
-        'New Booking Request',
-        `${req.user.name} has requested your service: "${service.title}".`,
-        'booking', {
-            relatedBooking: createdBooking._id
-        }
-    );
-
-    res.status(201).json(createdBooking);
-});
 
 /**
  * @desc    Get bookings for the logged-in user
@@ -176,138 +258,7 @@ export const getUnavailableSlots = asyncHandler(async (req, res) => {
     res.json(unavailableSlots);
 });
 
-/**
- * @desc    Allows a user to cancel their booking
- * @route   POST /api/bookings/:bookingId/cancel-user
- * @access  Private (User)
- */
-export const cancelBookingAsUser = asyncHandler(async (req, res) => {
-  const { bookingId } = req.params;
-  const { feePaid } = req.body;
-  const booking = await Booking.findById(bookingId).populate('provider').populate('service', 'title');
 
-  if (!booking) {
-    res.status(404); throw new Error('Booking not found');
-  }
-  if (booking.user.toString() !== req.user.id) {
-    res.status(403); throw new Error('Not authorized to cancel this booking');
-  }
-  if (booking.status === 'cancelled') {
-    return res.status(400).json({ message: 'Booking is already cancelled.' });
-  }
-  if (!['confirmed', 'in-progress'].includes(booking.status)) {
-    return res.status(400).json({ message: 'Only confirmed or in-progress bookings can be cancelled.' });
-  }
-  if (!feePaid) {
-    res.status(402); throw new Error('Cancellation fee is required.');
-  }
-
-  await User.findByIdAndUpdate(booking.provider._id, { $inc: { walletBalance: CANCELLATION_FEE_TO_PROVIDER } });
-  
-  await Transaction.create({
-    user: booking.provider._id,
-    type: 'cancellation_fee_credit',
-    amount: CANCELLATION_FEE_TO_PROVIDER,
-    currency: booking.provider.currency,
-    description: `Fee from cancelled booking #${bookingId.slice(-6)}`,
-    relatedBooking: bookingId,
-  });
-
-  booking.status = 'cancelled';
-  booking.cancelledBy = 'user';
-  booking.cancelledAt = new Date();
-  const updatedBooking = await booking.save();
-
-  await createNotification(
-    booking.provider._id,
-    'Booking Cancelled',
-    `${req.user.name} cancelled booking for "${booking.service.title}".`,
-    'booking'
-  );
-
-  res.json({ message: 'Booking cancelled.', booking: updatedBooking });
-});
-
-/**
- * @desc    Provider accepts a booking request
- * @route   PUT /api/bookings/:bookingId/accept
- * @access  Private (Provider)
- */
-export const acceptBooking = asyncHandler(async (req, res) => {
-    const { bookingId } = req.params;
-    const provider = req.user;
-
-    const booking = await Booking.findById(bookingId).populate('user').populate('service', 'title price');
-    if (!booking) {
-        res.status(404); throw new Error('Booking not found');
-    }
-    if (booking.provider.toString() !== provider._id.toString()) {
-        res.status(403); throw new Error('Not authorized');
-    }
-    if (booking.status !== 'pending') {
-        res.status(400); throw new Error('Booking is not pending');
-    }
-
-    const platformFee = booking.service.price * PROVIDER_PLATFORM_FEE_PERCENTAGE;
-
-    if (provider.monthlyFreeBookings > 0) {
-        await User.findByIdAndUpdate(provider._id, { $inc: { monthlyFreeBookings: -1 } });
-    } else if (provider.walletBalance < platformFee) {
-        res.status(402); throw new Error('Insufficient wallet balance for platform fee.');
-    } else {
-        await User.findByIdAndUpdate(provider._id, { $inc: { walletBalance: -platformFee } });
-        await Transaction.create({
-            user: provider._id, type: 'booking_fee', amount: -platformFee,
-            description: `Platform fee for booking #${bookingId.slice(-6)}`,
-            relatedBooking: bookingId, currency: provider.currency
-        });
-    }
-    
-    booking.status = 'confirmed';
-    booking.serviceVerificationCode = crypto.randomInt(100000, 999999).toString();
-    const updatedBooking = await booking.save();
-    
-    await createNotification(booking.user._id, 'Booking Confirmed!', `Your booking for "${booking.service.title}" has been confirmed.`, 'booking');
-
-    res.json(updatedBooking);
-});
-
-/**
- * @desc    Provider declines a booking request
- * @route   PUT /api/bookings/:bookingId/decline
- * @access  Private (Provider)
- */
-export const declineBooking = asyncHandler(async (req, res) => {
-    const { bookingId } = req.params;
-    const { reason } = req.body;
-
-    const booking = await Booking.findById(bookingId).populate('user').populate('service', 'title');
-
-    if (!booking) {
-        res.status(404); throw new Error('Booking not found');
-    }
-    if (booking.provider.toString() !== req.user._id.toString()) {
-        res.status(403); throw new Error('You are not authorized to decline this booking.');
-    }
-    if (booking.status !== 'pending') {
-        res.status(400); throw new Error('Only pending bookings can be declined.');
-    }
-
-    booking.status = 'rejected';
-    if(reason) {
-        booking.providerNotes = `Declined: ${reason}`;
-    }
-    const updatedBooking = await booking.save();
-
-    await createNotification(
-        booking.user._id, 
-        'Booking Declined', 
-        `Unfortunately, your booking for "${booking.service.title}" was declined by the provider.`, 
-        'booking'
-    );
-
-    res.json(updatedBooking);
-});
 
 
 /**
@@ -455,3 +406,7 @@ export const addProviderFeedback = asyncHandler(async (req, res) => {
 
     res.json(updatedBooking);
 });
+
+
+
+

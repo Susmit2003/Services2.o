@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -57,11 +56,11 @@ export function AppFooter() {
                   </Link>
                 </li>
               ))}
-               <li>
-                  <Link href="/contact" className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors">
-                    Contact Us
-                  </Link>
-                </li>
+              <li>
+                <Link href="/contact" className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors">
+                  Contact Us
+                </Link>
+              </li>
             </ul>
           </div>
         </div>

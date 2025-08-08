@@ -1,166 +1,40 @@
 'use server';
 
-import apiClient from '../api';
-import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
-import type { Booking, BookingFormData } from '@/types';
+import apiClient from "@/lib/api";
+import { cookies } from "next/headers";
+import type { Booking, BookingFormData } from "@/types";
 
-// Helper function to get authorization headers from cookies for server-side requests
 const getAuthHeaders = () => {
     const token = cookies().get('authToken')?.value;
-    if (!token) throw new Error('Not authorized, no token found');
-    return {
-        Authorization: `Bearer ${token}`,
-    };
+    if (!token) throw new Error("You must be logged in.");
+    return { Authorization: `Bearer ${token}` };
 };
 
+// --- ADD THIS NEW FUNCTION ---
 /**
- * Creates a new booking for the authenticated user.
- * @param bookingData The data required for creating a booking.
- * @returns The newly created booking object.
- */
-export async function createBooking(bookingData: BookingFormData) {
-  try {
-    const response = await apiClient.post('/bookings/create', bookingData, { headers: getAuthHeaders() });
-    revalidatePath('/bookings'); // Revalidate the user's booking list
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Your booking could not be completed.');
-  }
-}
-
-/**
- * Fetches all bookings made by the currently authenticated user.
- * @returns An array of booking objects.
+ * @desc    Fetches all bookings for the currently logged-in user.
+ * @returns An array of Booking objects.
  */
 export async function getUserBookings(): Promise<Booking[]> {
-  try {
-    const response = await apiClient.get('/bookings/user', { headers: getAuthHeaders() });
-    return response.data;
-  } catch (error: any) {
-    console.error("Failed to fetch user bookings:", error.response?.data?.message || error.message);
-    return []; // Return an empty array on error to prevent frontend crashes
-  }
-}
-
-/**
- * Fetches all bookings for the services of the currently authenticated provider.
- * @returns An array of booking objects.
- */
-export async function getProviderBookings(): Promise<Booking[]> {
-  try {
-    const response = await apiClient.get('/bookings/provider', { headers: getAuthHeaders() });
-    return response.data;
-  } catch (error: any) {
-    console.error("Failed to fetch provider bookings:", error.response?.data?.message || error.message);
-    return []; // Return an empty array on error
-  }
-}
-
-/**
- * Fetches unavailable time slots for a given service on a specific date.
- * @param serviceId The ID of the service.
- * @param date The date to check for availability.
- * @returns An array of unavailable time slot strings.
- */
-
-
-/**
- * Allows a user to cancel a booking they have made.
- * @param bookingId The ID of the booking to cancel.
- * @param feePaid A boolean indicating if a cancellation fee was paid.
- * @returns An object indicating success or an error.
- */
-export async function cancelBookingAsUser(bookingId: string, feePaid: boolean = false) {
-  try {
-    const response = await apiClient.post(`/bookings/${bookingId}/cancel-user`, { feePaid }, { headers: getAuthHeaders() });
-    revalidatePath('/bookings');
-    return response.data;
-  } catch (error: any) {
-    return { error: error.response?.data?.message || 'Failed to cancel booking.' };
-  }
-}
-
-// --- Provider-specific actions ---
-
-/**
- * Allows a provider to accept a pending booking request.
- * @param bookingId The ID of the booking to accept.
- * @returns The updated booking object or an error object.
- */
-export async function acceptBooking(bookingId: string) {
-  try {
-    const response = await apiClient.put(`/bookings/${bookingId}/accept`, {}, { headers: getAuthHeaders() });
-    revalidatePath('/dashboard/my-services');
-    return response.data;
-  } catch (error: any) {
-    return { error: error.response?.data?.message || 'Failed to accept booking.' };
-  }
-}
-
-/**
- * Allows a provider to decline a pending booking request.
- * @param bookingId The ID of the booking to decline.
- * @param reason The reason for declining.
- * @returns The updated booking object or an error object.
- */
-export async function declineBooking(bookingId: string, reason: string) {
     try {
-        const response = await apiClient.put(`/bookings/${bookingId}/decline`, { reason }, { headers: getAuthHeaders() });
-        revalidatePath('/dashboard/my-services');
+        const response = await apiClient.get('/bookings/user', { headers: getAuthHeaders() });
         return response.data;
     } catch (error: any) {
-        return { error: error.response?.data?.message || 'Failed to decline booking.' };
+        console.error("Failed to fetch user bookings:", error.message);
+        return [];
     }
 }
+// Helper to get auth headers on the server
 
-/**
- * Allows a provider to mark a booking as "in-progress".
- * @param bookingId The ID of the booking to start.
- * @returns The updated booking object or an error object.
- */
-export async function startBooking(bookingId: string) {
-  try {
-    const response = await apiClient.put(`/bookings/${bookingId}/start`, {}, { headers: getAuthHeaders() });
-    revalidatePath('/dashboard/my-services');
-    return response.data;
-  } catch (error: any) {
-    return { error: error.response?.data?.message || 'Failed to start booking.' };
-  }
-}
 
-/**
- * Allows a provider to complete a booking using a verification code.
- * @param bookingId The ID of the booking to complete.
- * @param verificationCode The code provided by the user.
- * @returns The updated booking object or an error object.
- */
-export async function completeBooking(bookingId: string, verificationCode: string) {
-    try {
-        const response = await apiClient.put(`/bookings/${bookingId}/complete`, { verificationCode }, { headers: getAuthHeaders() });
-        revalidatePath('/dashboard/my-services');
-        return response.data;
-    } catch (error: any) {
-        return { error: error.response?.data?.message || 'Failed to complete booking.' };
-    }
-}
+// --- USER ACTIONS ---
+export const createBooking = async (payload: BookingFormData) => {
+    await apiClient.post("/bookings/create", payload, { headers: getAuthHeaders() });
+};
 
-/**
- * Allows a provider to mark a booking as incomplete.
- * @param bookingId The ID of the booking.
- * @param reason The reason for marking it as incomplete.
- * @returns The updated booking object or an error object.
- */
-export async function markAsIncomplete(bookingId: string, reason: string) {
-    try {
-        const response = await apiClient.put(`/bookings/${bookingId}/incomplete`, { reason }, { headers: getAuthHeaders() });
-        revalidatePath('/dashboard/my-services');
-        return response.data;
-    } catch (error: any) {
-        return { error: error.response?.data?.message || 'Failed to mark booking as incomplete.' };
-    }
-}
-
+export const cancelBookingAsUser = async (bookingId: string, feePaid: boolean) => {
+    await apiClient.post(`/bookings/${bookingId}/cancel-user`, { feePaid }, { headers: getAuthHeaders() });
+};
 
 export const getUnavailableSlots = async (serviceId: string, date: Date): Promise<string[]> => {
     try {
@@ -174,3 +48,40 @@ export const getUnavailableSlots = async (serviceId: string, date: Date): Promis
     }
 };
 
+// --- PROVIDER ACTIONS ---
+
+export async function getProviderBookings(): Promise<Booking[]> {
+    try {
+        const response = await apiClient.get('/bookings/provider', { headers: getAuthHeaders() });
+        return response.data;
+    } catch (error) {
+        console.error("Failed to fetch provider bookings:", error);
+        return [];
+    }
+}
+
+export const acceptBooking = async (bookingId: string) => {
+    await apiClient.put(`/bookings/${bookingId}/accept`, {}, { headers: getAuthHeaders() });
+};
+
+export const declineBooking = async (bookingId: string, reason: string) => {
+    await apiClient.put(`/bookings/${bookingId}/decline`, { reason }, { headers: getAuthHeaders() });
+};
+
+// --- FIX: Add the missing exported functions ---
+
+export const verifyAndStartService = async (payload: { bookingId: string; verificationCode: string }) => {
+    await apiClient.put(`/bookings/${payload.bookingId}/start`, { verificationCode: payload.verificationCode }, { headers: getAuthHeaders() });
+};
+
+export const completeService = async (bookingId: string) => {
+    await apiClient.put(`/bookings/${bookingId}/complete`, {}, { headers: getAuthHeaders() });
+};
+
+export const addProviderFeedback = async (payload: { bookingId: string; rating: number; reviewText: string }) => {
+    await apiClient.post(`/bookings/${payload.bookingId}/provider-feedback`, { rating: payload.rating, reviewText: payload.reviewText }, { headers: getAuthHeaders() });
+};
+
+export const markAsIncomplete = async (bookingId: string, reason: string) => {
+    await apiClient.put(`/bookings/${bookingId}/incomplete`, { reason }, { headers: getAuthHeaders() });
+};

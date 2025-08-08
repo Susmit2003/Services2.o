@@ -29,17 +29,7 @@ export async function signupUser(signupData: SignupData) {
  * @returns The user's profile and JWT token upon successful login.
  * @throws An error with a specific message from the backend if login fails.
  */
-export async function loginUser(loginData: LoginData) {
-  try {
-    const response = await apiClient.post('/users/login', loginData);
-    return response.data;
-  } catch (error: any) {
-    // Extract the specific error message from the backend's response.
-    const errorMessage = error.response?.data?.message || 'Login failed. Please check your credentials and try again.';
-    console.error("Login Action Error:", errorMessage);
-    throw new Error(errorMessage);
-  }
-}
+
 
 /**
  * Fetches the profile of the currently authenticated user.
@@ -120,4 +110,37 @@ export async function forgotPassword(email: string) {
     
     // For now, we simulate a successful response to prevent frontend errors.
     return { success: true, message: "If an account with that email exists, a password reset link has been sent." };
+}
+
+
+
+
+
+
+
+
+
+
+export async function loginUser(loginData: LoginData) {
+  try {
+    const response = await apiClient.post('/users/login', loginData);
+    
+    if (response.data && response.data.token) {
+        // --- THIS IS THE FIX ---
+        // Set a secure, httpOnly cookie that expires in 24 hours.
+        // maxAge is in seconds (60 seconds * 60 minutes * 24 hours).
+        cookies().set('authToken', response.data.token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 60 * 60 * 24, // 24 hours
+            path: '/',
+            sameSite: 'strict',
+        });
+    }
+
+    return response.data; 
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || 'Login failed.';
+    throw new Error(errorMessage);
+  }
 }

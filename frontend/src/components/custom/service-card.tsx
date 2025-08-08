@@ -1,86 +1,78 @@
 "use client";
 
-import type { Service } from '@/types';
-import Link from 'next/link';
 import Image from 'next/image';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { RatingStars } from './rating-stars';
-import { ArchiveServiceButton } from './delete-service-button';
-import { ServiceStatusToggle } from './service-status-toggle';
-import { Edit, Eye } from 'lucide-react';
+import { Star, MapPin, ArrowRight, Edit } from 'lucide-react';
+import type { Service } from '@/types';
+import { useAuth } from '@/context/auth-context';
+import { useState } from 'react';
+import { BookingModal } from './booking-modal';
+import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast';
 
 interface ServiceCardProps {
   service: Service;
-  isProviderView?: boolean; // This prop controls if the edit/delete buttons are shown
-  onActionComplete?: () => void;
 }
 
-export function ServiceCard({ service, isProviderView = false, onActionComplete }: ServiceCardProps) {
+export function ServiceCard({ service }: ServiceCardProps) {
+  const { currentUser } = useAuth();
+  const { toast } = useToast();
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
 
-  const getStatusBadge = (status: Service['status']) => {
-    switch (status) {
-      case 'Active': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
-      case 'Inactive': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      case 'Archived': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+  const isOwnService = currentUser?._id === service.providerId;
+
+  const handleBookNowClick = () => {
+    if (!currentUser) {
+      toast({ title: "Please log in to book a service.", variant: "destructive" });
+      return;
     }
+    if (isOwnService) {
+        toast({
+            title: "Action Not Allowed",
+            description: "You cannot book your own service.",
+            variant: "destructive"
+        });
+        return;
+    }
+    setIsBookingModalOpen(true);
   };
 
   return (
-    <Card className="flex flex-col shadow-lg overflow-hidden h-full">
-      <div className="relative h-48 w-full">
-        <Image
-          src={service.images?.[0] || 'https://placehold.co/600x400.png'}
-          alt={service.title}
-          layout="fill"
-          objectFit="cover"
+    <>
+      <Card className="flex flex-col h-full overflow-hidden shadow-lg">
+        <CardHeader className="p-0">
+          <Image src={service.images[0]} alt={service.title} width={600} height={400} className="w-full h-48 object-cover" />
+        </CardHeader>
+        <CardContent className="p-4 flex-grow">
+          <Badge variant="secondary" className="mb-2">{service.category}</Badge>
+          <CardTitle className="font-headline text-lg truncate">{service.title}</CardTitle>
+          <div className="flex items-center text-sm text-muted-foreground">
+            <Star className="w-4 h-4 mr-1 text-yellow-500 fill-yellow-500" />
+            <span>{service.ratingAvg.toFixed(1)} ({service.totalReviews} reviews)</span>
+          </div>
+        </CardContent>
+        <CardFooter className="p-4 border-t">
+          <div className="flex justify-between items-center w-full">
+            <p className="font-bold text-lg">{service.priceDisplay}</p>
+            {isOwnService ? (
+              <Link href="/dashboard/my-services"><Button variant="outline"><Edit className="w-4 h-4 mr-2" /> Manage</Button></Link>
+            ) : (
+              <Button onClick={handleBookNowClick}>Book Now <ArrowRight className="w-4 h-4 ml-2" /></Button>
+            )}
+          </div>
+        </CardFooter>
+      </Card>
+
+      {currentUser && (
+        <BookingModal
+          isOpen={isBookingModalOpen}
+          onClose={() => setIsBookingModalOpen(false)}
+          service={service}
+          user={currentUser}
         />
-        {isProviderView && (
-            <Badge className={`absolute top-2 right-2 ${getStatusBadge(service.status)}`}>{service.status}</Badge>
-        )}
-      </div>
-      <CardHeader>
-        <CardTitle className="truncate font-headline">{service.title}</CardTitle>
-        <CardDescription className="truncate">{service.category} {'>'} {service.subCategory}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex-grow space-y-2 text-sm">
-        <RatingStars rating={service.ratingAvg || 0} totalReviews={service.totalReviews || 0} />
-        <p className="text-lg font-semibold text-foreground">{service.priceDisplay}</p>
-        <p className="text-muted-foreground text-xs">Provider: {service.providerName}</p>
-      </CardContent>
-      
-      {isProviderView ? (
-        // --- PROVIDER VIEW FOOTER ---
-        <CardFooter className="border-t p-4 flex justify-between items-center gap-2">
-            <div className="flex-1">
-                {service.status !== 'Archived' && (
-                    // --- FIX: Pass the correct service.id to the toggle component ---
-                    <ServiceStatusToggle serviceId={service._id} initialStatus={service.status as 'Active' | 'Inactive'} />
-                )}
-            </div>
-            <div className="flex gap-2">
-                <Link href={`/dashboard/my-services/edit/${service._id}`}>
-                    <Button variant="outline" size="icon" title="Edit Service">
-                        <Edit className="h-4 w-4" />
-                    </Button>
-                </Link>
-                <ArchiveServiceButton 
-                  serviceId={service._id} 
-                  serviceTitle={service.title} 
-                  isArchived={service.status === 'Archived'}
-                />
-            </div>
-        </CardFooter>
-      ) : (
-        // --- PUBLIC VIEW FOOTER ---
-        <CardFooter className="border-t p-4">
-            <Link href={`/all-services/${service._id}/book`} className="w-full">
-                <Button className="w-full">View Details</Button>
-            </Link>
-        </CardFooter>
       )}
-    </Card>
+    </>
   );
 }
