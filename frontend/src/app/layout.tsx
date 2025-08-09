@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import Script from 'next/script';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Loader2, Bell, LayoutGrid, ClipboardList, SlidersHorizontal, CalendarCheck, User, Wallet, Bug, Lightbulb } from 'lucide-react';
+import { Home,LayoutDashboard, Loader2, Bell, LayoutGrid, ClipboardList, SlidersHorizontal, CalendarCheck, User, Wallet, Bug, Lightbulb } from 'lucide-react';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
@@ -22,6 +22,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const mainNavItems = [
+    { href: "/", icon: Home, label: "Home" },
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/all-services", icon: LayoutGrid, label: "Browse Services" },
     { href: "/dashboard/my-bookings", icon: ClipboardList, label: "My Bookings" },

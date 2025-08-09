@@ -10,6 +10,13 @@ const getAuthHeaders = () => {
     return { Authorization: `Bearer ${token}` };
 };
 
+export const completeService = async (payload: { bookingId: string; verificationCode: string }) => {
+    const headers = getAuthHeaders();
+    // The body of the request will now contain the verificationCode
+    await apiClient.put(`/bookings/${payload.bookingId}/complete`, { verificationCode: payload.verificationCode }, { headers });
+};
+
+
 // --- ADD THIS NEW FUNCTION ---
 /**
  * @desc    Fetches all bookings for the currently logged-in user.
@@ -74,9 +81,6 @@ export const verifyAndStartService = async (payload: { bookingId: string; verifi
     await apiClient.put(`/bookings/${payload.bookingId}/start`, { verificationCode: payload.verificationCode }, { headers: getAuthHeaders() });
 };
 
-export const completeService = async (bookingId: string) => {
-    await apiClient.put(`/bookings/${bookingId}/complete`, {}, { headers: getAuthHeaders() });
-};
 
 export const addProviderFeedback = async (payload: { bookingId: string; rating: number; reviewText: string }) => {
     await apiClient.post(`/bookings/${payload.bookingId}/provider-feedback`, { rating: payload.rating, reviewText: payload.reviewText }, { headers: getAuthHeaders() });

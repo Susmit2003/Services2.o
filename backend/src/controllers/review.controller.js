@@ -3,6 +3,7 @@ import Review from '../models/review.model.js';
 import Service from '../models/service.model.js';
 import User from '../models/user.model.js';
 import Booking from '../models/booking.model.js';
+import { createNotification } from './notification.controller.js';
 
 // Validation helper
 const validateReviewInput = (data) => {
@@ -170,55 +171,6 @@ const updateServiceRating = async (serviceId, rating) => {
   });
 };
 
-export const addReview = asyncHandler(async (req, res) => {
-  const { bookingId, rating, comment } = req.body;
-  const userId = req.user.id;
-
-  if (!bookingId || !rating) {
-    res.status(400);
-    throw new Error('Booking ID and rating are required.');
-  }
-
-  const booking = await Booking.findById(bookingId);
-  if (!booking) {
-    res.status(404);
-    throw new Error('Booking not found.');
-  }
-  if (booking.user.toString() !== userId) {
-    res.status(403);
-    throw new Error('You can only review bookings you have made.');
-  }
-  if (booking.status !== 'completed') {
-    res.status(400);
-    throw new Error('You can only review completed services.');
-  }
-  if (booking.review) {
-    res.status(409);
-    throw new Error('You have already reviewed this booking.');
-  }
-
-  const review = await Review.create({
-    user: userId,
-    service: booking.service,
-    rating,
-    comment,
-  });
-
-  // Link the review to the booking
-  booking.review = review._id;
-  booking.userFeedback = { stars: rating, text: comment };
-  const updatedBooking = await booking.save();
-  
-  // Update the service's overall rating
-  await updateServiceRating(booking.service, rating);
-
-  res.status(201).json({
-    message: 'Review added successfully',
-    review,
-    booking: updatedBooking
-  });
-});
-
 
 export const getReviewsForService = asyncHandler(async (req, res) => {
   const { serviceId } = req.params;
@@ -228,4 +180,86 @@ export const getReviewsForService = asyncHandler(async (req, res) => {
     .limit(20);
     
   res.json(reviews);
+});
+
+
+
+
+
+/**
+ * @desc    Add a new review for a booking
+ * @route   POST /api/reviews/add
+ * @access  Private (User)
+ */
+export const addReview = asyncHandler(async (req, res) => {
+    const { bookingId, rating, comment } = req.body;
+    const user = req.user;
+
+    const booking = await Booking.findById(bookingId).populate('provider');
+    if (!booking) {
+        res.status(404); throw new Error('Booking not found.');
+    }
+    if (booking.user.toString() !== user._id.toString()) {
+        res.status(403); throw new Error('You can only review your own bookings.');
+    }
+    if (booking.status !== 'completed') {
+        res.status(400); throw new Error('You can only review completed services.');
+    }
+    if (booking.review) {
+        res.status(400); throw new Error('This service has already been reviewed.');
+    }
+
+    // 1. Create the new review
+    const review = await Review.create({
+        user: user._id,
+        service: booking.service,
+        booking: bookingId,
+        rating,
+        comment
+    });
+
+    // 2. Link the review to the booking
+    booking.review = review._id;
+    booking.userFeedback = { stars: rating, text: comment };
+    await booking.save();
+
+    // 3. Update the service's average rating atomically
+    const service = await Service.findById(booking.service);
+    if (service) {
+        service.ratingSum += rating;
+        service.totalReviews += 1;
+        service.ratingAvg = service.ratingSum / service.totalReviews;
+        await service.save();
+    }
+    
+    // 4. Notify the provider
+    await createNotification(
+        booking.provider._id,
+        "You've received a new review!",
+        `${user.name} left a ${rating}-star review for your service: "${booking.serviceTitle}".`,
+        'review'
+    );
+
+    res.status(201).json({ message: 'Review added successfully!' });
+});
+
+/**
+ * @desc    Get all reviews for a provider's services
+ * @route   GET /api/reviews/provider
+ * @access  Private (Provider)
+ */
+export const getProviderFeedback = asyncHandler(async (req, res) => {
+    const providerId = req.user._id;
+
+    // Find all services offered by the provider
+    const services = await Service.find({ providerId: providerId }).select('_id');
+    const serviceIds = services.map(s => s._id);
+
+    // Find all reviews for those services
+    const reviews = await Review.find({ service: { $in: serviceIds } })
+        .populate('user', 'name profileImage')
+        .populate('service', 'title')
+        .sort({ createdAt: -1 });
+        
+    res.json(reviews);
 });

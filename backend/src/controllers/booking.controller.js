@@ -48,14 +48,13 @@ export const createBooking = asyncHandler(async (req, res) => {
 
 // --- ACCEPT BOOKING (WITH FEE LOGIC) ---
 export const acceptBooking = asyncHandler(async (req, res) => {
-    const { bookingId } = req.params;
+     const { bookingId } = req.params;
     const provider = req.user;
 
     const booking = await Booking.findById(bookingId).populate('user service');
     if (!booking || booking.provider.toString() !== provider._id.toString() || booking.status !== 'pending') {
         res.status(400); throw new Error('Invalid booking or action not allowed.');
     }
-
     if (provider.monthlyFreeBookings > 0) {
         await User.findByIdAndUpdate(provider._id, { $inc: { monthlyFreeBookings: -1 } });
     } else {
@@ -74,7 +73,8 @@ export const acceptBooking = asyncHandler(async (req, res) => {
         });
     }
     
-    booking.status = 'confirmed';
+   booking.status = 'confirmed';
+    // --- THIS IS THE FIX: Generate and save the OTP ---
     booking.serviceVerificationCode = crypto.randomInt(100000, 999999).toString();
     const updatedBooking = await booking.save();
     
@@ -298,39 +298,7 @@ export const verifyAndStartService = asyncHandler(async (req, res) => {
     res.json(updatedBooking);
 });
 
-/**
- * @desc    Provider completes a service
- * @route   PUT /api/bookings/:bookingId/complete
- * @access  Private (Provider)
- */
-export const completeService = asyncHandler(async (req, res) => {
-    const { bookingId } = req.params;
-    const booking = await Booking.findById(bookingId).populate('user').populate('service', 'title');
 
-    if (!booking) {
-        res.status(404); throw new Error('Booking not found');
-    }
-    if (booking.provider.toString() !== req.user._id.toString()) {
-        res.status(403); throw new Error('You are not authorized to complete this service.');
-    }
-    if (booking.status !== 'in-progress') {
-        res.status(400); throw new Error('Service must be "in-progress" to be marked as complete.');
-    }
-
-    booking.status = 'completed';
-    const updatedBooking = await booking.save();
-
-    await Service.findByIdAndUpdate(booking.service._id, { $inc: { totalBookings: 1 } });
-
-    await createNotification(
-        booking.user._id, 
-        'Service Completed!', 
-        `Your service "${booking.service.title}" is complete. Please take a moment to leave a review.`, 
-        'booking'
-    );
-
-    res.json(updatedBooking);
-});
 
 /**
  * @desc    Provider marks a service as incomplete
@@ -403,6 +371,47 @@ export const addProviderFeedback = asyncHandler(async (req, res) => {
         `${req.user.name} left you feedback for the service "${booking.service.title}".`, 
         'review'
     );
+
+    res.json(updatedBooking);
+});
+
+
+
+
+
+
+
+// --- NEW FUNCTION: Complete Service with OTP Verification ---
+export const completeService = asyncHandler(async (req, res) => {
+    const { bookingId } = req.params;
+    const { verificationCode } = req.body;
+    const provider = req.user;
+
+    if (!verificationCode) {
+        res.status(400);
+        throw new Error("Verification code is required.");
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking || booking.provider.toString() !== provider._id.toString()) {
+        res.status(403);
+        throw new Error("You are not authorized to complete this booking.");
+    }
+    if (booking.status !== 'confirmed') { // Or 'in-progress' if you add that state
+        res.status(400);
+        throw new Error("Booking must be in 'confirmed' state to be completed.");
+    }
+    if (booking.serviceVerificationCode !== verificationCode) {
+        res.status(400);
+        throw new Error("Invalid verification code.");
+    }
+
+    booking.status = 'completed';
+    const updatedBooking = await booking.save();
+
+    // Notify both users to rate each other
+    await createNotification(booking.user, 'Service Completed!', `Please rate your experience with ${provider.name}.`, 'review');
+    await createNotification(provider._id, 'Service Completed!', `Please rate your experience with the customer.`, 'review');
 
     res.json(updatedBooking);
 });

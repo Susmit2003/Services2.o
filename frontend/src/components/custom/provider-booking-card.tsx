@@ -69,9 +69,13 @@ export function ProviderBookingCard({ booking }: ProviderBookingCardProps) {
             setIsDialogOpen(false);
         }
     };
+        const handleCompleteService = () => handleAction(
+        () => completeService({ bookingId: booking.id, verificationCode: verificationCode }),
+        "Service Completed!"
+    );
 
     const handleStartService = () => handleAction(() => verifyAndStartService({ bookingId: booking.id, verificationCode }), "Service Started!");
-    const handleCompleteService = () => handleAction(() => completeService(booking.id), "Service Completed!");
+    
     const handleSubmitFeedback = () => handleAction(() => addProviderFeedback({ bookingId: booking.id, rating, reviewText }), "Feedback Submitted");
     const handleAcceptBooking = () => handleAction(() => acceptBooking(booking.id), "Booking Accepted");
 
@@ -105,7 +109,28 @@ export function ProviderBookingCard({ booking }: ProviderBookingCardProps) {
                     </div>
                 );
             case 'confirmed':
-                return <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}><DialogTrigger asChild><Button><Play className="mr-2 h-4 w-4" /> Start Service</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Enter Verification Code</DialogTitle><DialogDescription>Ask the customer for their 6-digit code.</DialogDescription></DialogHeader><div className="py-4"><Input value={verificationCode} onChange={e => setVerificationCode(e.target.value)} maxLength={6} /></div><DialogFooter><DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose><Button onClick={handleStartService} disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : "Verify & Start"}</Button></DialogFooter></DialogContent></Dialog>;
+                return (
+                                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                        <DialogTrigger asChild><Button><CheckCircle className="mr-2 h-4 w-4" /> Complete Service</Button></DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Enter Verification Code</DialogTitle>
+                                <DialogDescription>Ask the customer for their 6-digit code to complete the service.</DialogDescription>
+                            </DialogHeader>
+                            <div className="py-4">
+                                <Input value={verificationCode} onChange={e => setVerificationCode(e.target.value)} maxLength={6} />
+                            </div>
+                            <DialogFooter>
+                                <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                                {/* This button now correctly calls the updated handler */}
+                                <Button onClick={handleCompleteService} disabled={isLoading}>
+                                    {isLoading ? <Loader2 className="animate-spin" /> : "Verify & Complete"}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                );
+
             case 'in-progress':
                 return (
                     <div className="flex gap-2">

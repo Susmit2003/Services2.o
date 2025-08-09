@@ -3,35 +3,40 @@
 
 import apiClient from '../api';
 import { revalidatePath } from 'next/cache';
-import type { Review } from '@/types';
+import { cookies } from "next/headers";
+import type { Review } from "@/types";
+
+
+const getAuthHeaders = () => {
+    const token = cookies().get('authToken')?.value;
+    if (!token) throw new Error("You must be logged in.");
+    return { Authorization: `Bearer ${token}` };
+};
+
+// --- THIS IS THE NEW FUNCTION ---
+/**
+ * @desc    Fetches all reviews for services offered by the logged-in user.
+ * @returns An array of Review objects.
+ */
+export async function getProviderFeedback(): Promise<Review[]> {
+    try {
+        // This assumes a backend route exists at GET /api/reviews/provider
+        const response = await apiClient.get('/reviews/provider', { headers: getAuthHeaders() });
+        return response.data;
+    } catch (error: any) {
+        console.error("Failed to fetch provider feedback:", error.message);
+        return [];
+    }
+}
 
 /**
  * Adds a new review for a specified service.
  * @param reviewData The review content, including bookingId, rating, and reviewText.
  * @returns An object containing the updated booking and the new review.
  */
-export async function addReview(reviewData: {
-  bookingId: string;
-  rating: number;
-  reviewText: string;
-}) {
-  try {
-    const payload = {
-      bookingId: reviewData.bookingId,
-      rating: reviewData.rating,
-      comment: reviewData.reviewText,
-    };
-    const response = await apiClient.post('/reviews/add', payload);
-    
-    // Revalidate the pages where the booking is displayed
-    revalidatePath('/bookings');
-    revalidatePath('/dashboard');
 
-    return response.data;
-  } catch (error: any) {
-    return { error: error.response?.data?.message || 'Failed to submit your review.' };
-  }
-}
+
+
 
 /**
  * Fetches all reviews associated with a specific service.
@@ -47,3 +52,8 @@ export async function getReviewsForService(serviceId: string): Promise<Review[]>
     return []; // Return an empty array on error
   }
 }
+
+export const addReview = async (payload: { bookingId: string, rating: number, comment: string }) => {
+    // This assumes a backend route exists at POST /api/reviews/add
+    await apiClient.post('/reviews/add', payload, { headers: getAuthHeaders() });
+};

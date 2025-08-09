@@ -1,4 +1,5 @@
 // This file is the single source of truth for all your application's data shapes.
+
 export interface UserProfile {
     _id: string;
     id: string;
@@ -17,9 +18,7 @@ export interface UserProfile {
     profileImage?: string;
     monthlyFreeBookings: number;
     dailyBookings: number;
-    // --- THIS IS THE FIX ---
-    // Add the fcmToken property to the user profile
-    fcmToken?: string; 
+    fcmToken?: string;
 }
 
 export interface Service {
@@ -59,27 +58,25 @@ export interface Booking {
         city: string;
         pinCode: string;
     };
+    serviceVerificationCode?: string;
     userFeedback?: { stars: number; text: string };
     providerFeedback?: { stars: number; text: string };
     cancelledBy?: 'user' | 'provider';
     cancelledAt?: string;
 }
 
-
-export interface Notification {
+// --- THIS IS THE FIX ---
+// Add the missing 'Review' type definition
+export interface Review {
     _id: string;
     id: string;
-    user: string;
-    title: string;
-    message: string;
-    isRead: boolean;
-    type: 'booking' | 'review' | 'system';
+    user: UserProfile; // Can be populated with user details
+    service: Service; // Can be populated with service details
+    booking: string;
+    rating: number;
+    comment?: string;
     createdAt: string;
 }
-
-
-
-
 
 
 export interface Transaction {
@@ -91,7 +88,8 @@ export interface Transaction {
     createdAt: string;
 }
 
-// Form Data Types
+// --- Form Data Types ---
+
 export interface ServiceFormData {
   title: string;
   description: string;
@@ -117,7 +115,8 @@ export interface BookingFormData {
   currency: 'INR' | 'USD';
 }
 
-// Auth Data Types
+// --- Auth Data Types ---
+
 export interface LoginData {
     identifier: string;
     password?: string;
