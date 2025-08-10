@@ -66,18 +66,28 @@ export interface Booking {
 }
 
 // --- THIS IS THE FIX ---
-// Add the missing 'Review' type definition
+// Add the missing 'Notification' type definition
+export interface Notification {
+    _id: string;
+    id: string;
+    user: string;
+    title: string;
+    message: string;
+    isRead: boolean;
+    type: 'booking' | 'review' | 'system';
+    createdAt: string;
+}
+
 export interface Review {
     _id: string;
     id: string;
-    user: UserProfile; // Can be populated with user details
-    service: Service; // Can be populated with service details
+    user: UserProfile;
+    service: Service;
     booking: string;
     rating: number;
     comment?: string;
     createdAt: string;
 }
-
 
 export interface Transaction {
     id: string;

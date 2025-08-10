@@ -222,6 +222,11 @@ const updateUserProfile = asyncHandler(async (req, res) => {
   user.mobile = req.body.mobile || user.mobile;
   user.profileImage = req.body.profileImage || user.profileImage;
 
+
+  if (req.body.fcmToken) {
+      user.fcmToken = req.body.fcmToken;
+  }
+
   if (req.body.address) {
     user.address = { ...user.address, ...req.body.address };
 

@@ -9,111 +9,67 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-/**
- * @desc    Create a Razorpay order
- * @route   POST /api/razorpay/create-order
- * @access  Private
- */
 export const createOrder = asyncHandler(async (req, res) => {
-  const {
-    amount,
-    currency,
-    receipt,
-    notes
-  } = req.body;
+  const { amount } = req.body;
+  if (!amount || isNaN(amount) || amount <= 0) {
+      res.status(400); throw new Error("A valid amount is required.");
+  }
+  const options = {
+    amount: Math.round(amount * 100),
+    currency: 'INR',
+    receipt: `receipt_order_${new Date().getTime()}`,
+  };
 
   try {
-    const options = {
-      amount: amount * 100, // Amount in the smallest currency unit
-      currency: currency || 'INR',
-      receipt,
-      notes,
-    };
-
     const order = await razorpay.orders.create(options);
-
-    if (!order) {
-      res.status(500);
-      throw new Error('Failed to create Razorpay order');
-    }
-
-    res.status(200).json({
-      key: process.env.RAZORPAY_KEY_ID,
-      order,
-      displayAmount: `${currencySymbols[order.currency] || ''}${(order.amount / 100).toFixed(2)}`
-    });
-
+    res.status(200).json(order);
   } catch (error) {
-    console.error('Razorpay order creation error:', error);
-    res.status(500);
-    throw new Error('Could not create payment order.');
+    console.error("RAZORPAY ORDER CREATION ERROR:", error);
+    res.status(500); throw new Error('Failed to create Razorpay order.');
   }
 });
 
-/**
- * @desc    Verify a Razorpay payment and top up wallet
- * @route   POST /api/razorpay/verify-payment
- * @access  Private
- */
 export const verifyPayment = asyncHandler(async (req, res) => {
-  const {
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature
-  } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
   const userId = req.user._id;
 
   try {
-    const shasum = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
-    shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
-    const digest = shasum.digest('hex');
+    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest('hex');
 
-    if (digest !== razorpay_signature) {
-      return res.status(400).json({
-        error: 'Payment verification failed. Signature mismatch.'
-      });
+    if (expectedSignature !== razorpay_signature) {
+      console.error("SIGNATURE MISMATCH!");
+      console.error("Expected Signature:", expectedSignature);
+      console.error("Received Signature:", razorpay_signature);
+      res.status(400);
+      throw new Error('Payment verification failed. Signature mismatch.');
     }
 
-    // Retrieve order details to get amount and currency
-    const orderDetails = await razorpay.orders.fetch(razorpay_order_id);
-    const amount = orderDetails.amount / 100; // Convert from paisa to rupees
-    const currency = orderDetails.currency;
+    const paymentDetails = await razorpay.payments.fetch(razorpay_payment_id);
+    const amount = paymentDetails.amount / 100;
 
-    // Update user's wallet balance
     const user = await User.findByIdAndUpdate(
-      userId, {
-        $inc: {
-          walletBalance: amount
-        }
-      }, {
-        new: true
-      }
+      userId,
+      { $inc: { walletBalance: amount } },
+      { new: true }
     );
 
-    // Create a transaction record
     await Transaction.create({
-      user: userId,
-      type: 'top_up',
-      amount,
-      currency,
+      user: userId, type: 'top_up', amount, currency: 'INR',
       description: 'Wallet top-up via Razorpay',
       razorpay_payment_id,
     });
 
     res.status(200).json({
-      message: 'Payment verified successfully and wallet updated.',
+      message: 'Payment verified successfully.',
       newBalance: user.walletBalance,
     });
 
   } catch (error) {
-    console.error('Payment verification error:', error);
-    res.status(500);
-    throw new Error('Server error during payment verification.');
+    console.error("RAZORPAY VERIFICATION ERROR:", error);
+    res.status(500); throw new Error('Server error during payment verification.');
   }
 });
-
-// Helper for currency symbols, can be moved to constants
-const currencySymbols = {
-  'INR': '₹',
-  'USD': '$'
-};

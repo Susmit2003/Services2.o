@@ -1,21 +1,35 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { getUserProfile, loginUser as loginAction, logoutUser as logoutAction } from '@/lib/actions/user.actions';
 import Cookies from 'js-cookie';
 import type { UserProfile, LoginData } from '@/types';
 import { Loader2 } from 'lucide-react';
 import apiClient from '@/lib/api';
 
+// --- THIS IS THE FIX ---
+// 1. Add 'refetchUser' to the context's type definition.
 interface AuthContextType {
   currentUser: UserProfile | null;
   isLoggedIn: boolean;
   isLoading: boolean;
   login: (loginData: LoginData) => Promise<void>;
   logout: () => Promise<void>;
+  refetchUser: () => Promise<void>; 
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const setAuthToken = (token: string | null) => {
+  if (token) {
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    Cookies.set('authToken', token, { expires: 7, path: '/' });
+  } else {
+    delete apiClient.defaults.headers.common['Authorization'];
+    Cookies.remove('authToken');
+  }
+};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -28,8 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const user = await getUserProfile();
         setCurrentUser(user);
       } catch (error) {
-        // If the token is invalid, clear it and the user state
-        Cookies.remove('authToken');
+        setAuthToken(null);
         setCurrentUser(null);
       }
     }
@@ -44,8 +57,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await loginAction(loginData);
       if (response && response.user) {
-        // The only job of this function is to update the state.
-        // The redirect will be handled by the main layout.
         setCurrentUser(response.user as UserProfile);
       } else {
         throw new Error("Login failed: Invalid response from server.");
@@ -59,10 +70,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     await logoutAction(); 
     setCurrentUser(null);
-    // The redirect is now handled by the main layout.
   };
   
-  const value = { currentUser, isLoggedIn: !!currentUser, isLoading, login, logout };
+  // 2. Define the 'refetchUser' function.
+  const refetchUser = useCallback(async () => {
+      setIsLoading(true);
+      await fetchUser();
+  }, [fetchUser]);
+  
+  // 3. Add 'refetchUser' to the value provided by the context.
+  const value = { currentUser, isLoggedIn: !!currentUser, isLoading, login, logout, refetchUser };
 
   return (
     <AuthContext.Provider value={value}>
