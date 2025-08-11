@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage, MessagePayload } from 'firebase/messaging'; // Import MessagePayload
 import { updateUserProfile } from './actions/user.actions';
 
 const firebaseConfig = {
@@ -17,22 +17,15 @@ const db = getFirestore(app);
 const messaging = (typeof window !== "undefined") ? getMessaging(app) : null;
 
 export const initializeFirebaseMessaging = async () => {
-  if (typeof window === 'undefined' || !messaging) return;
-
+  if (!messaging) return;
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
       const currentToken = await getToken(messaging, {
-        // IMPORTANT: Replace this with your VAPID key from the Firebase Console
-        vapidKey: 'YOUR_VAPID_KEY_FROM_FIREBASE_SETTINGS',
+        vapidKey: 'YOUR_VAPID_KEY_FROM_FIREBASE_SETTINGS', // Replace this!
       });
       if (currentToken) {
-        console.log('FCM Token received, saving to profile...');
-        // --- THIS IS THE FIX ---
-        // Save the token to the user's profile on the backend
         await updateUserProfile({ fcmToken: currentToken });
-      } else {
-        console.log('No registration token available.');
       }
     }
   } catch (error) {
@@ -40,7 +33,9 @@ export const initializeFirebaseMessaging = async () => {
   }
 };
 
-export const onMessageListener = () =>
+// --- THIS IS THE FIX ---
+// We now explicitly type the Promise to return a 'MessagePayload'.
+export const onMessageListener = (): Promise<MessagePayload> =>
   new Promise((resolve) => {
     if (messaging) {
         onMessage(messaging, (payload) => {

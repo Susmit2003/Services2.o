@@ -5,6 +5,44 @@ import type { LoginData, SignupData, UserProfile } from '@/types';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
+const getAuthHeaders = () => {
+    const token = cookies().get('authToken')?.value;
+    if (!token) throw new Error('Not authorized, no token found');
+    return { Authorization: `Bearer ${token}` };
+};
+
+export async function loginUser(loginData: LoginData) {
+  try {
+    const response = await apiClient.post('/users/login', loginData);
+    
+    if (response.data && response.data.token) {
+        // This sets the secure, httpOnly cookie that persists on refresh
+        cookies().set('authToken', response.data.token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: 60 * 60 * 24, // 24 hours
+            path: '/',
+            sameSite: 'strict',
+        });
+    }
+
+    return response.data; 
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || 'Login failed.';
+    throw new Error(errorMessage);
+  }
+}
+
+export async function getUserProfile(): Promise<UserProfile> {
+    try {
+        const response = await apiClient.get('/users/profile', {
+            headers: getAuthHeaders(),
+        });
+        return response.data;
+    } catch (error: any) {
+        throw new Error(error.response?.data?.message || 'Failed to fetch user profile.');
+    }
+}
 /**
  * Registers a new user by calling the backend API.
  * @param signupData The user's registration details (name, email, password, mobile).
@@ -37,25 +75,7 @@ export async function signupUser(signupData: SignupData) {
  * @returns The user's profile.
  * @throws An error if the profile fetch fails.
  */
-export async function getUserProfile(): Promise<UserProfile> {
-    try {
-        // --- FIX: Read token from cookies ---
-        const token = cookies().get('authToken')?.value;
-        if (!token) {
-            throw new Error('Not authorized, no token');
-        }
 
-        const response = await apiClient.get('/users/profile', {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
-        return response.data;
-    } catch (error: any) {
-        const errorMessage = error.response?.data?.message || 'Failed to fetch user profile.';
-        throw new Error(errorMessage);
-    }
-}
 /**
  * Updates the profile of the currently authenticated user.
  * @param profileData The data to update.
@@ -121,26 +141,4 @@ export async function forgotPassword(email: string) {
 
 
 
-export async function loginUser(loginData: LoginData) {
-  try {
-    const response = await apiClient.post('/users/login', loginData);
-    
-    if (response.data && response.data.token) {
-        // --- THIS IS THE FIX ---
-        // Set a secure, httpOnly cookie that expires in 24 hours.
-        // maxAge is in seconds (60 seconds * 60 minutes * 24 hours).
-        cookies().set('authToken', response.data.token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 60 * 60 * 24, // 24 hours
-            path: '/',
-            sameSite: 'strict',
-        });
-    }
 
-    return response.data; 
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.message || 'Login failed.';
-    throw new Error(errorMessage);
-  }
-}
