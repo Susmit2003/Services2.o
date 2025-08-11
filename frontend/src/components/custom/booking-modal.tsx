@@ -1,135 +1,6 @@
-// "use client";
-
-// import { useState, useEffect } from 'react';
-// import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-// import { Button } from '@/components/ui/button';
-// import { Label } from '@/components/ui/label';
-// import { Input } from '@/components/ui/input';
-// import { Calendar } from '@/components/ui/calendar';
-// import { useToast } from '@/hooks/use-toast';
-// import { createBooking, getUnavailableSlots } from '@/lib/actions/booking.actions';
-// import type { Service, UserProfile, BookingFormData } from '@/types';
-// import { Loader2, MapPin } from 'lucide-react';
-// import { useRouter } from 'next/navigation';
-
-// interface BookingModalProps {
-//   isOpen: boolean;
-//   onClose: () => void;
-//   service: Service;
-//   user: UserProfile;
-// }
-
-// export function BookingModal({ isOpen, onClose, service, user }: BookingModalProps) {
-//   const { toast } = useToast();
-//   const router = useRouter();
-//   const [bookingDate, setBookingDate] = useState<Date | undefined>(new Date());
-//   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
-//   const [isLoading, setIsLoading] = useState(false);
-//   const [unavailableSlots, setUnavailableSlots] = useState<string[]>([]);
-
-//   // --- FIX: Add state for address fields ---
-//   const [address, setAddress] = useState(user.address?.line1 || '');
-//   const [city, setCity] = useState(user.address?.city || '');
-//   const [pinCode, setPinCode] = useState(user.address?.pinCode || '');
-
-//   useEffect(() => {
-//     if (!bookingDate || !service) return;
-//     const fetchUnavailable = async () => {
-//         const slots = await getUnavailableSlots(service._id, bookingDate);
-//         setUnavailableSlots(slots);
-//     };
-//     fetchUnavailable();
-//   }, [bookingDate, service]);
-
-//   const handleBookingSubmit = async () => {
-//     if (!bookingDate || !selectedTimeSlot) {
-//       toast({ title: "Please select a date and time slot.", variant: "destructive" });
-//       return;
-//     }
-//     // --- FIX: Add validation for address fields ---
-//     if (!address || !city || !pinCode) {
-//         toast({ title: "Please provide a complete service address.", variant: "destructive"});
-//         return;
-//     }
-
-//     setIsLoading(true);
-//     try {
-//       const bookingData: BookingFormData = {
-//         serviceId: service._id,
-//         bookingDate: bookingDate.toISOString(),
-//         timeSlot: selectedTimeSlot,
-//         // Use the state values for the address
-//         address: { line1: address, city, pinCode },
-//         totalPrice: service.price,
-//         currency: user.currency,
-//       };
-//       await createBooking(bookingData);
-
-//       toast({ title: "Booking Request Sent!", description: "The provider has been notified." });
-//       onClose();
-//       router.push('/dashboard/my-bookings');
-//     } catch (error: any) {
-//       toast({ title: "Booking Failed", description: error.message, variant: "destructive" });
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   };
-
-//   return (
-//     <Dialog open={isOpen} onOpenChange={onClose}>
-//       <DialogContent className="sm:max-w-md" style={{ maxHeight: '95vh', overflowY: 'auto' }}>
-//         <DialogHeader>
-//           <DialogTitle>Book Service: {service.title}</DialogTitle>
-//           <DialogDescription>Confirm the details for your booking request.</DialogDescription>
-//         </DialogHeader>
-//         <div className="grid gap-6 py-4">
-//           <div className="space-y-2">
-//             <Label>Select a Date</Label>
-//             <Calendar
-//               mode="single"
-//               selected={bookingDate}
-//               onSelect={setBookingDate}
-//               disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() - 1))}
-//               className="rounded-md border"
-//             />
-//           </div>
-//           <div className="space-y-2">
-//             <Label>Select a Time Slot</Label>
-//             <div className="grid grid-cols-2 gap-2">
-//               {service.timeSlots.map(slot => (
-//                 <Button key={slot} variant={selectedTimeSlot === slot ? 'default' : 'outline'} onClick={() => setSelectedTimeSlot(slot)} disabled={unavailableSlots.includes(slot)}>
-//                   {slot.replace(/_/g, ' ')}
-//                 </Button>
-//               ))}
-//             </div>
-//           </div>
-//            {/* --- FIX: Add address input fields --- */}
-//           <div className="space-y-2">
-//              <Label className="flex items-center"><MapPin className="mr-2 h-5 w-5 text-primary"/>Service Address</Label>
-//              <div className="space-y-2">
-//                <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address Line 1" required />
-//                <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" required />
-//                <Input value={pinCode} onChange={(e) => setPinCode(e.target.value)} placeholder="PIN/ZIP Code" required />
-//              </div>
-//              <p className="text-xs text-muted-foreground mt-1">Auto-filled from your profile. You can edit if needed.</p>
-//            </div>
-//         </div>
-//         <DialogFooter>
-//           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-//           <Button onClick={handleBookingSubmit} disabled={isLoading}>
-//             {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-//             Confirm Booking
-//           </Button>
-//         </DialogFooter>
-//       </DialogContent>
-//     </Dialog>
-//   );
-// }
-
-
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -141,7 +12,7 @@ import { createBooking, getUnavailableSlots } from '@/lib/actions/booking.action
 import type { Service, UserProfile, BookingFormData } from '@/types';
 import { Loader2, MapPin, Calendar as CalendarIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
+import { format } from 'date-fns'; // We no longer need DayOfWeek
 import { cn } from '@/lib/utils';
 
 interface BookingModalProps {
@@ -151,6 +22,10 @@ interface BookingModalProps {
   user: UserProfile;
 }
 
+const dayNameToIndex: { [key: string]: number } = {
+    Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6
+};
+
 export function BookingModal({ isOpen, onClose, service, user }: BookingModalProps) {
   const { toast } = useToast();
   const router = useRouter();
@@ -158,20 +33,42 @@ export function BookingModal({ isOpen, onClose, service, user }: BookingModalPro
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [unavailableSlots, setUnavailableSlots] = useState<string[]>([]);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
 
   const [address, setAddress] = useState(user.address?.line1 || '');
   const [city, setCity] = useState(user.address?.city || '');
   const [pinCode, setPinCode] = useState(user.address?.pinCode || '');
-
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
+  // --- THIS IS THE FIX (Part 1) ---
+  // The 'disabledDays' constant is now correctly typed as an array of numbers.
+  const disabledDays: number[] = useMemo(() => {
+    const availableDayNames = new Set(service.timeSlots.map(slot => slot.split(' ')[0]));
+    const availableDayIndexes = Array.from(availableDayNames).map(name => dayNameToIndex[name]);
+    
+    // Return an array of day indexes (0-6) that are NOT available.
+    return [0, 1, 2, 3, 4, 5, 6].filter(
+      index => !availableDayIndexes.includes(index)
+    );
+  }, [service.timeSlots]);
+
   useEffect(() => {
-    if (!bookingDate || !service) return;
-    const fetchUnavailable = async () => {
-        const slots = await getUnavailableSlots(service._id, bookingDate);
-        setUnavailableSlots(slots);
+    const updateSlots = async () => {
+        if (!bookingDate || !service) {
+            setAvailableTimeSlots([]);
+            return;
+        }
+        const selectedDayName = format(bookingDate, 'EEEE');
+        const potentialSlotsForDay = service.timeSlots
+            .filter(slot => slot.startsWith(selectedDayName))
+            .map(slot => slot.replace(`${selectedDayName} `, ''));
+        const alreadyBookedSlots = await getUnavailableSlots(service._id, bookingDate);
+        const finalAvailableSlots = potentialSlotsForDay.filter(slot => !alreadyBookedSlots.includes(slot));
+        
+        setAvailableTimeSlots(finalAvailableSlots);
+        setSelectedTimeSlot('');
     };
-    fetchUnavailable();
+    updateSlots();
   }, [bookingDate, service]);
 
   const handleBookingSubmit = async () => {
@@ -220,13 +117,7 @@ export function BookingModal({ isOpen, onClose, service, user }: BookingModalPro
             <Label>Select a Date</Label>
             <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal h-11",
-                    !bookingDate && "text-muted-foreground"
-                  )}
-                >
+                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal h-11", !bookingDate && "text-muted-foreground")}>
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {bookingDate ? format(bookingDate, "PPP") : <span>Pick a date</span>}
                 </Button>
@@ -237,9 +128,14 @@ export function BookingModal({ isOpen, onClose, service, user }: BookingModalPro
                   selected={bookingDate}
                   onSelect={(date) => {
                       setBookingDate(date);
-                      setIsCalendarOpen(false); // Close the popover on select
+                      setIsCalendarOpen(false);
                   }}
-                  disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() - 1))}
+                  // --- THIS IS THE FIX (Part 2) ---
+                  // The disabled prop now uses a simpler and more correct format.
+                  disabled={{
+                      before: new Date(new Date().setDate(new Date().getDate())),
+                      dayOfWeek: disabledDays
+                  }}
                   initialFocus
                 />
               </PopoverContent>
@@ -248,12 +144,15 @@ export function BookingModal({ isOpen, onClose, service, user }: BookingModalPro
           <div className="space-y-2">
             <Label>Select a Time Slot</Label>
             <div className="grid grid-cols-2 gap-2">
-              {service.timeSlots.map(slot => (
-                <Button key={slot} variant={selectedTimeSlot === slot ? 'default' : 'outline'} onClick={() => setSelectedTimeSlot(slot)} disabled={unavailableSlots.includes(slot)}>
-                  {slot.replace(/_/g, ' ')}
+              {availableTimeSlots.map(slot => (
+                <Button key={slot} variant={selectedTimeSlot === slot ? 'default' : 'outline'} onClick={() => setSelectedTimeSlot(slot)}>
+                  {slot}
                 </Button>
               ))}
             </div>
+            {bookingDate && availableTimeSlots.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center pt-2">No available slots for this day.</p>
+            )}
           </div>
           <div className="space-y-2">
              <Label className="flex items-center"><MapPin className="mr-2 h-5 w-5 text-primary"/>Service Address</Label>
@@ -268,7 +167,7 @@ export function BookingModal({ isOpen, onClose, service, user }: BookingModalPro
 
         <DialogFooter className="flex-shrink-0 pt-4 border-t">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleBookingSubmit} disabled={isLoading}>
+          <Button onClick={handleBookingSubmit} disabled={isLoading || !selectedTimeSlot}>
             {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Confirm Booking
           </Button>
