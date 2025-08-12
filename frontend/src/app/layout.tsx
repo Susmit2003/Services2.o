@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import Script from 'next/script';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home,LayoutDashboard, Loader2, Bell, LayoutGrid, ClipboardList, SlidersHorizontal, CalendarCheck, User, Wallet, Bug, Lightbulb } from 'lucide-react';
+import { LayoutDashboard, Loader2, Bell, LayoutGrid, ClipboardList, SlidersHorizontal, CalendarCheck, User, Wallet, Bug, Lightbulb } from 'lucide-react';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
@@ -15,14 +15,13 @@ import { ThemeToggle } from '@/components/custom/theme-toggle';
 import { UserNav } from '@/components/layout/user-nav';
 import { MobileFooter } from '@/components/layout/mobile-footer';
 import { NotificationsPopover } from '@/components/layout/notifications-popover';
-import { AppFooter } from '@/components/layout/app-footer'; // Import the main footer
+import { AppFooter } from '@/components/layout/app-footer';
 
 // This is the main application layout for LOGGED-IN users
 function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const mainNavItems = [
-    { href: "/", icon: Home, label: "Home" },
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/all-services", icon: LayoutGrid, label: "Browse Services" },
     { href: "/dashboard/my-bookings", icon: ClipboardList, label: "My Bookings" },
@@ -101,22 +100,27 @@ function RootLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading) return; // Wait until the initial auth check is done
 
     const isAuthPage = pathname === '/login' || pathname === '/signup';
 
     if (isLoggedIn && isAuthPage) {
       router.push('/dashboard');
-    } else if (!isLoggedIn && !isAuthPage) {
+    }
+
+    if (!isLoggedIn && !isAuthPage) {
       router.push('/login');
     }
   }, [isLoggedIn, isLoading, pathname, router]);
 
 
+  // While the initial auth check is happening, show a full-page loader.
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen"><Loader2 className="h-12 w-12 animate-spin" /></div>;
   }
 
+  // If the user is logged in, show the main app layout.
+  // Otherwise, if they are on an auth page, show that page's content.
   if (isLoggedIn) {
     return <AppLayout>{children}</AppLayout>;
   } else {

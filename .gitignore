@@ -75,3 +75,7 @@ coverage/
 # SASS cache
 .sass-cache/
 backend/.env
+
+
+
+backend/firebase-service-account.json

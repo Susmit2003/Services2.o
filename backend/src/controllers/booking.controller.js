@@ -48,41 +48,56 @@ export const createBooking = asyncHandler(async (req, res) => {
 
 // --- ACCEPT BOOKING (WITH FEE LOGIC) ---
 export const acceptBooking = asyncHandler(async (req, res) => {
-     const { bookingId } = req.params;
+    const { bookingId } = req.params;
     const provider = req.user;
 
     const booking = await Booking.findById(bookingId).populate('user service');
     if (!booking || booking.provider.toString() !== provider._id.toString() || booking.status !== 'pending') {
         res.status(400); throw new Error('Invalid booking or action not allowed.');
     }
+
+    // --- THIS IS THE FIX ---
+    // The logic is now correctly structured to handle free credits first.
+
+    // Check for free bookings first.
     if (provider.monthlyFreeBookings > 0) {
+        // If they have free credits, deduct one.
         await User.findByIdAndUpdate(provider._id, { $inc: { monthlyFreeBookings: -1 } });
     } else {
+        // If they have NO free credits, then proceed with the platform fee.
         const platformFee = booking.totalPrice * PLATFORM_FEE_PERCENTAGE;
 
+        // Check for sufficient wallet balance.
         if (provider.walletBalance < platformFee) {
-            res.status(402);
-            throw new Error(`Insufficient balance. You need ₹${platformFee.toFixed(2)} to accept.`);
+            res.status(402); // Payment Required
+            throw new Error(`Insufficient balance. You need ₹${platformFee.toFixed(2)} to accept this booking. Please recharge your wallet.`);
         }
 
+        // If balance is sufficient, deduct the fee from the provider's wallet.
         await User.findByIdAndUpdate(provider._id, { $inc: { walletBalance: -platformFee } });
+
+        // Log the platform fee transaction for the provider's records.
         await Transaction.create({
-            user: provider._id, type: 'booking_fee', amount: -platformFee,
+            user: provider._id,
+            type: 'booking_fee',
+            amount: -platformFee,
             description: `10% platform fee for booking #${bookingId.slice(-6)}`,
-            relatedBooking: bookingId, currency: provider.currency
+            relatedBooking: bookingId,
+            currency: provider.currency
         });
     }
+    // --- End of FIX ---
     
-   booking.status = 'confirmed';
-    // --- THIS IS THE FIX: Generate and save the OTP ---
+    // Once the fee/credit logic is handled, confirm the booking.
+    booking.status = 'confirmed';
     booking.serviceVerificationCode = crypto.randomInt(100000, 999999).toString();
     const updatedBooking = await booking.save();
     
-    await createNotification(booking.user._id, 'Booking Confirmed!', `Your booking for "${booking.service.title}" is confirmed.`, 'booking');
+    // Notify the customer that their booking has been accepted.
+    await createNotification(booking.user._id, 'Booking Confirmed!', `Your booking for "${booking.service.title}" has been confirmed.`, 'booking');
     
     res.json(updatedBooking);
 });
-
 
 
 

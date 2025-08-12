@@ -1,11 +1,12 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { getUserProfile, loginUser as loginAction, logoutUser as logoutAction } from '@/lib/actions/user.actions';
-import Cookies from 'js-cookie';
+import { initializeFirebaseMessaging, onMessageListener } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 import type { UserProfile, LoginData } from '@/types';
-import { Loader2 } from 'lucide-react';
-import apiClient from '@/lib/api';
+import { MessagePayload } from 'firebase/messaging'; // Import the type from firebase
 
 interface AuthContextType {
   currentUser: UserProfile | null;
@@ -13,6 +14,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (loginData: LoginData) => Promise<void>;
   logout: () => Promise<void>;
+  refetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,36 +22,46 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const { toast } = useToast();
 
   const fetchUser = useCallback(async () => {
-    const tokenExists = !!Cookies.get('authToken');
-    if (tokenExists) {
-      try {
-        const user = await getUserProfile();
-        setCurrentUser(user);
-      } catch (error) {
-        // If the token is invalid, clear it and the user state
-        Cookies.remove('authToken');
-        setCurrentUser(null);
-      }
+    try {
+      const user = await getUserProfile();
+      setCurrentUser(user);
+    } catch (error) {
+      setCurrentUser(null);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
+  
+  useEffect(() => {
+    if (currentUser) {
+      initializeFirebaseMessaging();
+
+      // --- THIS IS THE FIX ---
+      // We are now correctly typing the 'payload' as 'MessagePayload'
+      onMessageListener().then((payload: MessagePayload) => {
+        if (payload.notification) {
+          toast({
+            title: payload.notification.title,
+            description: payload.notification.body,
+          });
+          router.refresh();
+        }
+      }).catch(err => console.error('Failed to listen for messages', err));
+    }
+  }, [currentUser, toast, router]);
 
   const login = async (loginData: LoginData) => {
     try {
-      const response = await loginAction(loginData);
-      if (response && response.user) {
-        // The only job of this function is to update the state.
-        // The redirect will be handled by the main layout.
-        setCurrentUser(response.user as UserProfile);
-      } else {
-        throw new Error("Login failed: Invalid response from server.");
-      }
+      await loginAction(loginData);
+      await fetchUser();
     } catch (error) {
       setCurrentUser(null);
       throw error;
@@ -59,10 +71,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     await logoutAction(); 
     setCurrentUser(null);
-    // The redirect is now handled by the main layout.
   };
   
-  const value = { currentUser, isLoggedIn: !!currentUser, isLoading, login, logout };
+  const refetchUser = useCallback(async () => {
+    await fetchUser();
+  }, [fetchUser]);
+  
+  const value = { currentUser, isLoggedIn: !!currentUser, isLoading, login, logout, refetchUser };
 
   return (
     <AuthContext.Provider value={value}>
