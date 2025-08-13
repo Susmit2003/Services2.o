@@ -1,5 +1,5 @@
 import asyncHandler from 'express-async-handler';
-import Booking from '../models/booking.model.js'; // <-- This line fixes the "Booking is not defined" error
+import Booking from '../models/booking.model.js'; 
 import Service from '../models/service.model.js';
 import User from '../models/user.model.js';
 import Transaction from '../models/transaction.model.js';
@@ -11,6 +11,119 @@ const PLATFORM_FEE_PERCENTAGE = 0.10; // 10%
 const CANCELLATION_FEE = 20;
 const CANCELLATION_FEE_TO_PROVIDER = 15;
 const CANCELLATION_FEE_TO_PLATFORM = 5;
+
+// --- ACCEPT BOOKING (WITH CORRECTED FEE LOGIC) ---
+export const acceptBooking = asyncHandler(async (req, res) => {
+    const { bookingId } = req.params;
+    
+    const provider = await User.findById(req.user._id);
+    if (!provider) {
+        res.status(401);
+        throw new Error('Provider not found.');
+    }
+
+    const booking = await Booking.findById(bookingId).populate('user service');
+    if (!booking || booking.provider.toString() !== provider._id.toString() || booking.status !== 'pending') {
+        res.status(400); throw new Error('Invalid booking or action not allowed.');
+    }
+
+    // --- LOGGING FOR DEBUGGING ---
+    console.log(`[Accept Booking] Provider: ${provider.name}, Free Bookings: ${provider.monthlyFreeBookings}`);
+    
+    // Check if the provider has free bookings available.
+    if (provider.monthlyFreeBookings > 0) {
+        console.log('[Accept Booking] Using a free credit.');
+        await User.findByIdAndUpdate(provider._id, { $inc: { monthlyFreeBookings: -1 } });
+        booking.wasFreeAcceptance = true; // Mark as a free acceptance.
+    } else {
+        console.log('[Accept Booking] No free credits. Charging platform fee.');
+        const platformFee = booking.totalPrice * PLATFORM_FEE_PERCENTAGE;
+
+        if (provider.walletBalance < platformFee) {
+            res.status(402);
+            throw new Error(`Insufficient balance. You need ₹${platformFee.toFixed(2)} to accept.`);
+        }
+
+        await User.findByIdAndUpdate(provider._id, { $inc: { walletBalance: -platformFee } });
+        await Transaction.create({
+            user: provider._id, type: 'booking_fee', amount: -platformFee,
+            description: `10% platform fee for booking #${bookingId.slice(-6)}`,
+            relatedBooking: bookingId, currency: provider.currency
+        });
+        booking.wasFreeAcceptance = false; // Mark as a paid acceptance.
+    }
+    
+    booking.status = 'confirmed';
+    booking.serviceVerificationCode = crypto.randomInt(100000, 999999).toString();
+    await booking.save();
+    
+    await createNotification(booking.user._id, 'Booking Confirmed!', `Your booking for "${booking.service.title}" is confirmed.`, 'booking');
+    res.json(booking);
+});
+
+// --- CANCEL BOOKING (WITH CORRECTED REFUND LOGIC) ---
+export const cancelBookingAsUser = asyncHandler(async (req, res) => {
+  const { bookingId } = req.params;
+  const user = req.user;
+  
+  const booking = await Booking.findById(bookingId).populate('provider service');
+  if (!booking || booking.user.toString() !== user._id.toString() || booking.status !== 'confirmed') {
+      res.status(400); throw new Error('Only confirmed bookings can be cancelled.');
+  }
+
+  if (user.walletBalance < CANCELLATION_FEE) {
+      res.status(402); throw new Error(`Insufficient balance. You need ₹${CANCELLATION_FEE} to cancel.`);
+  }
+
+  // 1. Deduct full penalty from the customer
+  await User.findByIdAndUpdate(user._id, { $inc: { walletBalance: -CANCELLATION_FEE } });
+  await Transaction.create({
+    user: user._id, type: 'cancellation_fee_debit', amount: -CANCELLATION_FEE,
+    description: `Cancellation fee for booking #${bookingId.slice(-6)}`,
+    relatedBooking: bookingId, currency: user.currency,
+  });
+
+  // 2. Credit the provider their ₹15 share of the penalty
+  await User.findByIdAndUpdate(booking.provider._id, { $inc: { walletBalance: CANCELLATION_FEE_TO_PROVIDER } });
+  await Transaction.create({
+    user: booking.provider._id, type: 'cancellation_fee_credit', amount: CANCELLATION_FEE_TO_PROVIDER,
+    description: `Penalty fee from cancelled booking #${bookingId.slice(-6)}`,
+    relatedBooking: bookingId, currency: booking.provider.currency,
+  });
+
+  // --- THIS IS THE FIX ---
+  // 3. Refund the provider's original platform fee OR free credit.
+  console.log(`[Cancel Booking] Checking how booking was accepted. wasFreeAcceptance: ${booking.wasFreeAcceptance}`);
+
+  if (booking.wasFreeAcceptance === true) {
+      await User.findByIdAndUpdate(booking.provider._id, { $inc: { monthlyFreeBookings: 1 } });
+      console.log(`[Cancel Booking] Refunded 1 free credit to provider ${booking.provider._id}`);
+  } else {
+      const platformFeeToRefund = booking.totalPrice * PLATFORM_FEE_PERCENTAGE;
+      await User.findByIdAndUpdate(booking.provider._id, { $inc: { walletBalance: platformFeeToRefund } });
+      await Transaction.create({
+          user: booking.provider._id, type: 'refund', amount: platformFeeToRefund,
+          description: `Platform fee refund for cancelled booking #${bookingId.slice(-6)}`,
+          relatedBooking: bookingId, currency: booking.provider.currency,
+      });
+      console.log(`[Cancel Booking] Refunded ₹${platformFeeToRefund} to provider ${booking.provider._id}`);
+  }
+  
+  // 4. Update the booking status
+  booking.status = 'cancelled';
+  booking.cancelledBy = 'user';
+  booking.cancelledAt = new Date();
+  await booking.save();
+  
+  await createNotification(booking.provider._id, 'Booking Cancelled', `${user.name} cancelled their booking for "${booking.service.title}".`, 'booking');
+  res.json({ message: 'Booking cancelled successfully.' });
+});
+
+
+
+
+
+
 
 // --- CREATE BOOKING ---
 export const createBooking = asyncHandler(async (req, res) => {
@@ -46,61 +159,6 @@ export const createBooking = asyncHandler(async (req, res) => {
   res.status(201).json(booking);
 });
 
-// --- ACCEPT BOOKING (WITH FEE LOGIC) ---
-export const acceptBooking = asyncHandler(async (req, res) => {
-    const { bookingId } = req.params;
-    const provider = req.user;
-
-    const booking = await Booking.findById(bookingId).populate('user service');
-    if (!booking || booking.provider.toString() !== provider._id.toString() || booking.status !== 'pending') {
-        res.status(400); throw new Error('Invalid booking or action not allowed.');
-    }
-
-    // --- THIS IS THE FIX ---
-    // The logic is now correctly structured to handle free credits first.
-
-    // Check for free bookings first.
-    if (provider.monthlyFreeBookings > 0) {
-        // If they have free credits, deduct one.
-        await User.findByIdAndUpdate(provider._id, { $inc: { monthlyFreeBookings: -1 } });
-    } else {
-        // If they have NO free credits, then proceed with the platform fee.
-        const platformFee = booking.totalPrice * PLATFORM_FEE_PERCENTAGE;
-
-        // Check for sufficient wallet balance.
-        if (provider.walletBalance < platformFee) {
-            res.status(402); // Payment Required
-            throw new Error(`Insufficient balance. You need ₹${platformFee.toFixed(2)} to accept this booking. Please recharge your wallet.`);
-        }
-
-        // If balance is sufficient, deduct the fee from the provider's wallet.
-        await User.findByIdAndUpdate(provider._id, { $inc: { walletBalance: -platformFee } });
-
-        // Log the platform fee transaction for the provider's records.
-        await Transaction.create({
-            user: provider._id,
-            type: 'booking_fee',
-            amount: -platformFee,
-            description: `10% platform fee for booking #${bookingId.slice(-6)}`,
-            relatedBooking: bookingId,
-            currency: provider.currency
-        });
-    }
-    // --- End of FIX ---
-    
-    // Once the fee/credit logic is handled, confirm the booking.
-    booking.status = 'confirmed';
-    booking.serviceVerificationCode = crypto.randomInt(100000, 999999).toString();
-    const updatedBooking = await booking.save();
-    
-    // Notify the customer that their booking has been accepted.
-    await createNotification(booking.user._id, 'Booking Confirmed!', `Your booking for "${booking.service.title}" has been confirmed.`, 'booking');
-    
-    res.json(updatedBooking);
-});
-
-
-
 
 
 
@@ -124,46 +182,6 @@ export const declineBooking = asyncHandler(async (req, res) => {
     res.json(updatedBooking);
 });
 
-// --- CANCEL BOOKING (WITH FEE LOGIC) ---
-export const cancelBookingAsUser = asyncHandler(async (req, res) => {
-  const { bookingId } = req.params;
-  const user = req.user;
-  
-  const booking = await Booking.findById(bookingId).populate('provider service');
-  if (!booking || booking.user.toString() !== user._id.toString() || booking.status !== 'confirmed') {
-      res.status(400); throw new Error('Only confirmed bookings can be cancelled.');
-  }
-
-  if (user.walletBalance < CANCELLATION_FEE) {
-      res.status(402);
-      throw new Error(`Insufficient balance. You need ₹${CANCELLATION_FEE} to cancel.`);
-  }
-
-  await User.findByIdAndUpdate(user._id, { $inc: { walletBalance: -CANCELLATION_FEE } });
-  await Transaction.create({
-    user: user._id, type: 'cancellation_fee_debit', amount: -CANCELLATION_FEE,
-    description: `Cancellation fee for booking #${bookingId.slice(-6)}`,
-    relatedBooking: bookingId, currency: user.currency,
-  });
-
-  await User.findByIdAndUpdate(booking.provider._id, { $inc: { walletBalance: CANCELLATION_FEE_TO_PROVIDER } });
-  await Transaction.create({
-    user: booking.provider._id, type: 'cancellation_fee_credit', amount: CANCELLATION_FEE_TO_PROVIDER,
-    description: `Fee from cancelled booking #${bookingId.slice(-6)}`,
-    relatedBooking: bookingId, currency: booking.provider.currency,
-  });
-
-  console.log(`Platform earned ₹${CANCELLATION_FEE_TO_PLATFORM} from cancellation of booking ${bookingId}`);
-
-  booking.status = 'cancelled';
-  booking.cancelledBy = 'user';
-  booking.cancelledAt = new Date();
-  const updatedBooking = await booking.save();
-  
-  await createNotification(booking.provider._id, 'Booking Cancelled', `${user.name} cancelled their booking.`, 'booking');
-  
-  res.json({ message: 'Booking cancelled successfully.', booking: updatedBooking });
-});
 
 
 
