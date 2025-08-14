@@ -8,7 +8,11 @@ const notificationSchema = new mongoose.Schema({
   isRead: { type: Boolean, default: false },
   relatedBooking: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking' },
   relatedService: { type: mongoose.Schema.Types.ObjectId, ref: 'Service' },
-  relatedReview: { type: mongoose.Schema.Types.ObjectId, ref: 'Review' }
+  relatedReview: { type: mongoose.Schema.Types.ObjectId, ref: 'Review' },
+  data: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
 }, { timestamps: true });
 
 const Notification = mongoose.model('Notification', notificationSchema);

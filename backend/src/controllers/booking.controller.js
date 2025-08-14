@@ -59,6 +59,14 @@ export const acceptBooking = asyncHandler(async (req, res) => {
     
     await createNotification(booking.user._id, 'Booking Confirmed!', `Your booking for "${booking.service.title}" is confirmed.`, 'booking');
     res.json(booking);
+
+    await createNotification(
+    booking.user._id, 
+    'Booking Confirmed!', 
+    `Your booking for "${booking.service.title}" has been confirmed.`, 
+    'booking',
+    { bookingId: booking._id.toString() } // <-- Add the booking ID here
+);
 });
 
 // --- CANCEL BOOKING (WITH CORRECTED REFUND LOGIC) ---
@@ -153,7 +161,8 @@ export const createBooking = asyncHandler(async (req, res) => {
     service.providerId,
     'New Booking Request',
     `${user.name} has requested your service: "${service.title}".`,
-    'booking'
+    'booking',
+    { bookingId: booking._id.toString() } 
   );
 
   res.status(201).json(booking);

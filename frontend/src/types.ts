@@ -76,6 +76,10 @@ export interface Notification {
     isRead: boolean;
     type: 'booking' | 'review' | 'system';
     createdAt: string;
+    data?: {
+        bookingId?: string;
+        // You can add other types of IDs here in the future
+    };
 }
 
 export interface Review {
