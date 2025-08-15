@@ -1,52 +1,47 @@
 "use client";
 
-import { useState } from 'react';
-import type { Service } from '@/types';
-import { ServiceCard } from '@/components/custom/service-card';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { PlusCircle, Frown } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Star } from "lucide-react";
+import type { Service } from "@/types";
+import Image from 'next/image';
+import { ServiceStatusToggle } from "@/components/custom/service-status-toggle";
+import { DeleteServiceButton } from "@/components/custom/delete-service-button";
 
 interface MyServicesClientProps {
-  initialServices: Service[];
+    services: Service[];
 }
 
-export function MyServicesClient({ initialServices }: MyServicesClientProps) {
-  const [services, setServices] = useState(initialServices);
-  
-  return (
-    <div>
-      <div className="flex justify-end mb-6">
-        <Link href="/dashboard/my-services/add">
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add New Service
-          </Button>
-        </Link>
-      </div>
-
-      {services.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {services.map(service => (
-            <ServiceCard 
-              key={service._id} 
-              service={service} 
-              isProviderView={true} // This prop shows the Edit/Delete/Toggle buttons
-            />
-          ))}
+// --- THIS IS THE FIX ---
+// Added the missing 'export default' statement.
+export default function MyServicesClient({ services }: MyServicesClientProps) {
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {services.map((service) => (
+                <Card key={service._id} className="flex flex-col h-full overflow-hidden shadow-lg">
+                    <CardHeader className="p-0 relative">
+                        <Image
+                            src={service.images[0] || 'https://placehold.co/600x400.png'}
+                            alt={service.title}
+                            width={600}
+                            height={400}
+                            className="w-full h-48 object-cover"
+                        />
+                    </CardHeader>
+                    <CardContent className="p-4 flex-grow">
+                        <Badge variant="secondary" className="mb-2">{service.category}</Badge>
+                        <CardTitle className="font-headline text-lg mb-2 truncate">{service.title}</CardTitle>
+                        <div className="flex items-center text-sm text-muted-foreground mb-2">
+                            <Star className="w-4 h-4 mr-1 text-yellow-500 fill-yellow-500" />
+                            <span>{service.ratingAvg.toFixed(1)} ({service.totalReviews} reviews)</span>
+                        </div>
+                    </CardContent>
+                    <CardFooter className="p-4 border-t bg-muted/50 flex justify-between items-center">
+                        <ServiceStatusToggle serviceId={service._id} initialStatus={service.status as 'Active' | 'Inactive'} />
+                        <DeleteServiceButton serviceId={service._id} />
+                    </CardFooter>
+                </Card>
+            ))}
         </div>
-      ) : (
-        <Card className="text-center py-20 border-2 border-dashed rounded-lg">
-          <Frown className="mx-auto h-12 w-12 text-muted-foreground" />
-          <CardHeader>
-            <CardTitle className="mt-4 text-2xl font-semibold">No Services Found</CardTitle>
-            <CardDescription className="mt-2">
-                You haven't listed any services yet. Get started by adding one.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-    </div>
-  );
+    );
 }

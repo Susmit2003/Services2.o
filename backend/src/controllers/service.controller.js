@@ -118,6 +118,20 @@ const updateService = asyncHandler(async (req, res) => {
     res.status(403).json({ message: 'Editing services is disabled.' });
 });
 
+
+export const archiveService = asyncHandler(async (req, res) => {
+    const service = await Service.findById(req.params.id);
+    if (!service || service.providerId.toString() !== req.user._id.toString()) {
+        res.status(403);
+        throw new Error('Not authorized to delete this service');
+    }
+   
+    service.status = 'Archived';
+    await service.save();
+    res.status(200).json({ message: 'Service archived successfully' });
+});
+
+
 export {
   getAllServices,
   getServiceById,

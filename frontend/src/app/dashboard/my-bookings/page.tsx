@@ -4,6 +4,8 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { ClipboardList } from "lucide-react";
 import type { Booking } from "@/types";
 
+// --- THIS IS THE FIX ---
+// Added the missing 'export default' statement.
 export default async function MyBookingsPage() {
     let bookings: Booking[] = [];
     try {

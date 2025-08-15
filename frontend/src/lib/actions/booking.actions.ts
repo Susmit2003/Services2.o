@@ -17,20 +17,8 @@ export const completeService = async (payload: { bookingId: string; verification
 };
 
 
-// --- ADD THIS NEW FUNCTION ---
-/**
- * @desc    Fetches all bookings for the currently logged-in user.
- * @returns An array of Booking objects.
- */
-export async function getUserBookings(): Promise<Booking[]> {
-    try {
-        const response = await apiClient.get('/bookings/user', { headers: getAuthHeaders() });
-        return response.data;
-    } catch (error: any) {
-        console.error("Failed to fetch user bookings:", error.message);
-        return [];
-    }
-}
+
+
 // Helper to get auth headers on the server
 
 
@@ -89,3 +77,14 @@ export const addProviderFeedback = async (payload: { bookingId: string; rating: 
 export const markAsIncomplete = async (bookingId: string, reason: string) => {
     await apiClient.put(`/bookings/${bookingId}/incomplete`, { reason }, { headers: getAuthHeaders() });
 };
+
+
+export async function getUserBookings(): Promise<Booking[]> {
+    try {
+        const response = await apiClient.get('/bookings/user', { headers: getAuthHeaders() });
+        return response.data;
+    } catch (error: any) {
+        console.error("Failed to fetch user bookings:", error.message);
+        return [];
+    }
+}

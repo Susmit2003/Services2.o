@@ -65,7 +65,9 @@ export const acceptBooking = asyncHandler(async (req, res) => {
     'Booking Confirmed!', 
     `Your booking for "${booking.service.title}" has been confirmed.`, 
     'booking',
-    { bookingId: booking._id.toString() } // <-- Add the booking ID here
+    { bookingId: booking._id.toString(),
+      redirectUrl: '/dashboard/my-bookings'
+     } // <-- Add the booking ID here
 );
 });
 
@@ -123,8 +125,16 @@ export const cancelBookingAsUser = asyncHandler(async (req, res) => {
   booking.cancelledAt = new Date();
   await booking.save();
   
-  await createNotification(booking.provider._id, 'Booking Cancelled', `${user.name} cancelled their booking for "${booking.service.title}".`, 'booking');
-  res.json({ message: 'Booking cancelled successfully.' });
+  await createNotification(
+    booking.provider._id, 
+    'Booking Cancelled', 
+    `${user.name} cancelled their booking for "${booking.service.title}".`, 
+    'booking',
+    { 
+        bookingId: booking._id.toString(),
+        redirectUrl: '/dashboard/provider-schedule' // <-- Add this
+    }
+);
 });
 
 
@@ -162,7 +172,9 @@ export const createBooking = asyncHandler(async (req, res) => {
     'New Booking Request',
     `${user.name} has requested your service: "${service.title}".`,
     'booking',
-    { bookingId: booking._id.toString() } 
+    { bookingId: booking._id.toString(),
+     redirectUrl: '/dashboard/provider-schedule'
+     } 
   );
 
   res.status(201).json(booking);
@@ -189,6 +201,17 @@ export const declineBooking = asyncHandler(async (req, res) => {
     await createNotification(booking.user._id, 'Booking Declined', `Your booking for "${booking.service.title}" was declined.`, 'booking');
     
     res.json(updatedBooking);
+
+    await createNotification(
+    booking.user._id, 
+    'Booking Declined', 
+    `Your booking for "${booking.service.title}" was declined.`, 
+    'booking',
+    { 
+        bookingId: booking._id.toString(),
+        redirectUrl: '/dashboard/my-bookings' // <-- Add this
+    }
+);
 });
 
 
@@ -303,42 +326,7 @@ export const getUnavailableSlots = asyncHandler(async (req, res) => {
 
 
 
-/**
- * @desc    Provider starts a service with a verification code
- * @route   PUT /api/bookings/:bookingId/start
- * @access  Private (Provider)
- */
-export const verifyAndStartService = asyncHandler(async (req, res) => {
-    const { bookingId } = req.params;
-    const { verificationCode } = req.body;
-    
-    const booking = await Booking.findById(bookingId).populate('user').populate('service', 'title');
 
-    if (!booking) {
-        res.status(404); throw new Error('Booking not found');
-    }
-    if (booking.provider.toString() !== req.user._id.toString()) {
-        res.status(403); throw new Error('You are not authorized to start this service.');
-    }
-    if (booking.status !== 'confirmed') {
-        res.status(400); throw new Error('Booking must be in "confirmed" status to start.');
-    }
-    if (booking.serviceVerificationCode !== verificationCode) {
-        res.status(400); throw new Error('The verification code is incorrect.');
-    }
-
-    booking.status = 'in-progress';
-    const updatedBooking = await booking.save();
-
-    await createNotification(
-        booking.user._id, 
-        'Service Started', 
-        `Your service "${booking.service.title}" is now in progress.`, 
-        'booking'
-    );
-
-    res.json(updatedBooking);
-});
 
 
 
@@ -423,37 +411,55 @@ export const addProviderFeedback = asyncHandler(async (req, res) => {
 
 
 
-// --- NEW FUNCTION: Complete Service with OTP Verification ---
-export const completeService = asyncHandler(async (req, res) => {
+
+
+
+
+
+export const verifyAndStartService = asyncHandler(async (req, res) => {
     const { bookingId } = req.params;
     const { verificationCode } = req.body;
-    const provider = req.user;
-
-    if (!verificationCode) {
-        res.status(400);
-        throw new Error("Verification code is required.");
-    }
-
+    
     const booking = await Booking.findById(bookingId);
-    if (!booking || booking.provider.toString() !== provider._id.toString()) {
-        res.status(403);
-        throw new Error("You are not authorized to complete this booking.");
+    if (!booking || booking.provider.toString() !== req.user._id.toString()) {
+        res.status(403); throw new Error('Not authorized for this booking.');
     }
-    if (booking.status !== 'confirmed') { // Or 'in-progress' if you add that state
-        res.status(400);
-        throw new Error("Booking must be in 'confirmed' state to be completed.");
+    if (booking.status !== 'confirmed') {
+        res.status(400); throw new Error('Service must be confirmed to start.');
     }
     if (booking.serviceVerificationCode !== verificationCode) {
-        res.status(400);
-        throw new Error("Invalid verification code.");
+        res.status(400); throw new Error('Invalid verification code.');
+    }
+
+    booking.status = 'in-progress';
+    const updatedBooking = await booking.save();
+
+    await createNotification(booking.user, 'Service Started', `Your service "${booking.serviceTitle}" is now in progress.`, 'booking');
+
+    res.json(updatedBooking);
+});
+
+// --- THIS IS THE FIX (Part 2) ---
+// This function now correctly handles completing a service that is 'in-progress'.
+export const completeService = asyncHandler(async (req, res) => {
+    const { bookingId } = req.params;
+    
+    const booking = await Booking.findById(bookingId);
+    if (!booking || booking.provider.toString() !== req.user._id.toString()) {
+        res.status(403); throw new Error('Not authorized for this booking.');
+    }
+    // It now correctly checks for the 'in-progress' status.
+    if (booking.status !== 'in-progress') {
+        res.status(400); throw new Error('Service must be in progress to be completed.');
     }
 
     booking.status = 'completed';
     const updatedBooking = await booking.save();
 
-    // Notify both users to rate each other
-    await createNotification(booking.user, 'Service Completed!', `Please rate your experience with ${provider.name}.`, 'review');
-    await createNotification(provider._id, 'Service Completed!', `Please rate your experience with the customer.`, 'review');
+    // Increment the total number of bookings for the service
+    await Service.findByIdAndUpdate(booking.service, { $inc: { totalBookings: 1 } });
+
+    await createNotification(booking.user, 'Service Completed!', `Your service is complete. Please leave a review.`, 'review');
 
     res.json(updatedBooking);
 });
