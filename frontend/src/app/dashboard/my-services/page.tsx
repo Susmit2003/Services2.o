@@ -1,29 +1,62 @@
-import { getProviderServices } from '@/lib/actions/service.actions';
-import { MyServicesClient } from './my-services-client'; // We will create this next
-import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Service } from '@/types';
+import { getProviderServices } from "@/lib/actions/service.actions";
+// --- THIS IS THE FIX ---
+// Changed from a named import { MyServicesClient } to a default import.
+import MyServicesClient from "./my-services-client"; 
+import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { PlusCircle } from "lucide-react";
+import type { Service } from "@/types";
+import Link from 'next/link';
+import { Button } from "@/components/ui/button";
 
-// This Server Component fetches the data before the page loads.
+// This is a Server Component that fetches its own data.
 export default async function MyServicesPage() {
-    
     let services: Service[] = [];
     try {
-        // Fetch the services created by this provider
         services = await getProviderServices();
     } catch (error) {
         console.error("Failed to fetch provider services:", error);
-        // If there's an error (e.g., user not logged in), services will be an empty array.
+    }
+
+    if (services.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <Card className="text-center w-full max-w-lg p-8">
+                    <CardHeader>
+                        <PlusCircle className="mx-auto h-16 w-16 text-muted-foreground/50 mb-4" />
+                        <CardTitle className="font-headline text-2xl">You Haven't Created Any Services Yet</CardTitle>
+                        <CardDescription>
+                            Click below to add your first service and start connecting with customers.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardFooter className="justify-center">
+                         <Link href="/dashboard/my-services/add">
+                            <Button size="lg">Add Your First Service</Button>
+                        </Link>
+                    </CardFooter>
+                </Card>
+            </div>
+        );
     }
 
     return (
-        <div className="space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight font-headline">My Services</h1>
-                <p className="text-muted-foreground">View, edit, and manage all the services you offer.</p>
-            </div>
-
-            {/* We pass the server-fetched data to a Client Component for interactivity */}
-            <MyServicesClient initialServices={services} />
+        <div className="space-y-8"> 
+            <header className="flex justify-between items-center">
+                <div>
+                    <h1 className="font-headline text-4xl font-bold">My Services</h1>
+                    <p className="mt-2 text-lg text-muted-foreground">
+                        Here are the services you currently offer.
+                    </p>
+                </div>
+                <Link href="/dashboard/my-services/add">
+                    <Button>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add New Service
+                    </Button>
+                </Link>
+            </header>
+            
+            {/* The client component is now correctly imported and rendered */}
+            <MyServicesClient services={services} />
         </div>
     );
 }

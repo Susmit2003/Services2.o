@@ -13,6 +13,10 @@ const bookingSchema = new mongoose.Schema({
   timeSlot: { type: String, required: true },
   status: { type: String, enum: ['pending', 'confirmed', 'rejected', 'in-progress', 'completed', 'cancelled', 'incompleted'], default: 'pending' },
   totalPrice: { type: Number, required: true },
+  wasFreeAcceptance: {
+    type: Boolean,
+    default: false,
+  },
   
   // --- FIX: Make address fields explicitly required ---
   address: {
