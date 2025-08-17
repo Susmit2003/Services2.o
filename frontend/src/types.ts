@@ -1,4 +1,7 @@
 // This file is the single source of truth for all your application's data shapes.
+import { type ForwardRefExoticComponent, type RefAttributes, type SVGProps } from 'react';
+type LucideIcon = ForwardRefExoticComponent<Omit<SVGProps<SVGSVGElement>, "ref"> & RefAttributes<SVGSVGElement>>;
+
 
 export interface UserProfile {
     _id: string;
@@ -76,6 +79,10 @@ export interface Notification {
     isRead: boolean;
     type: 'booking' | 'review' | 'system';
     createdAt: string;
+    data?: {
+        bookingId?: string;
+        redirectUrl?: string;
+    };
 }
 
 export interface Review {
@@ -137,4 +144,21 @@ export interface SignupData {
     mobile: string;
     email: string;
     password?: string;
+}
+
+
+
+
+export interface ServiceCategory {
+    name: string;
+    query: string;
+    icon: LucideIcon;
+    bgColor: string;
+    color: string;
+    subcategories: {
+        name: string;
+        query: string;
+        icon?: LucideIcon;
+        color?: string;
+    }[];
 }

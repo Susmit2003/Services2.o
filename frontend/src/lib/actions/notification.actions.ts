@@ -12,8 +12,6 @@ const getAuthHeaders = () => {
 
 export async function getNotifications(): Promise<Notification[]> {
     try {
-        // This now correctly calls GET /api/notifications, which will work
-        // after you rename the backend route file.
         const response = await apiClient.get('/notifications', { headers: getAuthHeaders() });
         return response.data;
     } catch (error: any) {
@@ -22,9 +20,15 @@ export async function getNotifications(): Promise<Notification[]> {
     }
 }
 
+/**
+ * @desc    Marks all of a user's unread notifications as read.
+ * @returns A success message.
+ */
 export async function markAllNotificationsAsRead() {
  try {
-   await apiClient.post('/notifications/mark-all-read', {}, { headers: getAuthHeaders() });
+   // --- THIS IS THE FIX ---
+   // Changed from apiClient.post to apiClient.put to match the backend route.
+   await apiClient.put('/notifications/mark-all-read', {}, { headers: getAuthHeaders() });
  } catch (error: any) {
    throw new Error('Failed to mark notifications as read.');
  }

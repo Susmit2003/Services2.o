@@ -1,22 +1,17 @@
 'use server';
 
-import apiClient from '../api';
-import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers'; // Import the cookies function
-import type { ServiceFormData, Service, ServiceCategory } from '@/types';
+import apiClient from "@/lib/api";
+import { cookies } from "next/headers";
 
-// --- FIX: Create a helper function to get auth headers from cookies ---
-// This ensures all protected server actions are authenticated correctly.
+import { revalidatePath } from 'next/cache';
+import type { Service, ServiceFormData, ServiceCategory } from "@/types";
 const getAuthHeaders = () => {
     const token = cookies().get('authToken')?.value;
-    if (!token) {
-        // This will be caught by the try/catch block in the calling function
-        throw new Error('Not authorized, no token found');
-    }
-    return {
-        Authorization: `Bearer ${token}`,
-    };
+    if (!token) throw new Error("You must be logged in.");
+    return { Authorization: `Bearer ${token}` };
 };
+
+
 
 /**
  * Fetches all active services, with optional filtering.
@@ -58,19 +53,7 @@ export async function getProviderServices(): Promise<Service[]> {
     }
 }
 
-/**
- * Updates the status of a provider's service.
- */
-export async function updateServiceStatus(serviceId: string, status: 'Active' | 'Inactive') {
-  try {
-    const response = await apiClient.patch(`/services/${serviceId}/status`, { status }, { headers: getAuthHeaders() });
-    revalidatePath('/dashboard/my-services');
-    return { success: true, service: response.data };
-  } catch (error: any) {
-    // We throw the actual error message to be displayed in the toast
-    throw new Error(error.response?.data?.message || 'Failed to update service status.');
-  }
-}
+
 
 // ... include any other actions like getServiceById, updateService, archiveService, etc.,
 // making sure to add { headers: getAuthHeaders() } to any that require authentication.
@@ -95,12 +78,26 @@ export async function updateService(serviceId: string, serviceData: any) {
   }
 }
 
+
+
+
+export async function updateServiceStatus(serviceId: string, status: 'Active' | 'Inactive') {
+    try {
+        await apiClient.patch(`/services/${serviceId}/status`, { status }, { headers: getAuthHeaders() });
+        revalidatePath('/dashboard/my-services');
+    } catch (error: any) {
+        throw new Error(error.response?.data?.message || "Failed to update service status.");
+    }
+}
+
+/**
+ * @desc    Archives a service (soft delete).
+ */
 export async function archiveService(serviceId: string) {
-  try {
-    const response = await apiClient.delete(`/services/${serviceId}`, { headers: getAuthHeaders() });
-    revalidatePath('/dashboard/my-services');
-    return response.data;
-  } catch (error: any) {
-    throw new Error(error.response?.data?.message || 'Failed to archive the service.');
-  }
+    try {
+        await apiClient.delete(`/services/${serviceId}`, { headers: getAuthHeaders() });
+        revalidatePath('/dashboard/my-services');
+    } catch (error: any) {
+        throw new Error(error.response?.data?.message || "Failed to archive service.");
+    }
 }
