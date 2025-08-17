@@ -40,9 +40,9 @@ export default function ProfilePage() {
         if (currentUser) {
             reset({
                 username: currentUser.username || '',
-                fullName: currentUser.fullName || currentUser.name || '',
+                fullName: currentUser.name || '',
                 email: currentUser.email || '',
-                mobile: currentUser.mobileNumber || currentUser.mobile || '',
+                mobile: currentUser.mobile || '',
                 address: {
                     line1: currentUser.address?.line1 || '',
                     city: currentUser.address?.city || '',
@@ -85,6 +85,13 @@ export default function ProfilePage() {
             
             const payload: Partial<UserProfile> = {
                 ...data,
+                address: data.address
+                    ? {
+                        line1: data.address.line1 ?? "",
+                        city: data.address.city ?? "",
+                        pinCode: data.address.pinCode ?? "",
+                    }
+                    : undefined,
                 profileImage: imageUrl === null ? undefined : imageUrl,
             };
             
