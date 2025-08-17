@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -9,17 +8,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from '@/context/auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import { logoutUser } from '@/lib/actions/user.actions';
 import { currencySymbols } from '@/lib/constants';
 
 
 export const UserNav = () => {
-  const { currentUser, refetchUser, isLoading, isLoggedIn } = useAuth();
+  const { currentUser, logout, isLoading, isLoggedIn } = useAuth(); // Use logout from context
   const router = useRouter();
 
   const handleLogout = async () => {
-    await logoutUser();
-    await refetchUser(); // Update auth context
+    await logout(); // Use context logout
     router.push('/login'); // Redirect to login page
   };
   

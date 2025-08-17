@@ -14,8 +14,8 @@ const getAuthHeaders = () => {
 export async function loginUser(loginData: LoginData) {
   try {
     const response = await apiClient.post('/users/login', loginData);
-    
-    if (response.data && response.data.token) {
+
+    if (response?.data?.token) {
         // This sets the secure, httpOnly cookie that persists on refresh
         cookies().set('authToken', response.data.token, {
             httpOnly: true,
@@ -24,10 +24,13 @@ export async function loginUser(loginData: LoginData) {
             path: '/',
             sameSite: 'strict',
         });
+        
     }
 
     return response.data; 
   } catch (error: any) {
+    console.log("Login error:", error);
+    
     const errorMessage = error.response?.data?.message || 'Login failed.';
     throw new Error(errorMessage);
   }
@@ -113,6 +116,7 @@ export async function logoutUser() {
     console.log("User logged out from the frontend action.");
     // In a real app, you might call a backend endpoint like:
     // await apiClient.post('/users/logout');
+    cookies().set('authToken', '', { maxAge: 0, path: '/' });
     return { success: true, message: "Logged out successfully." };
 }
 

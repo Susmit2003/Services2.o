@@ -30,6 +30,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const user = await getUserProfile();
       setCurrentUser(user);
     } catch (error) {
+      console.log('Error fetching user profile:', error);
       setCurrentUser(null);
     } finally {
       setIsLoading(false);
