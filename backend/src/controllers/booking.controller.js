@@ -235,6 +235,7 @@ const PROVIDER_PLATFORM_FEE_PERCENTAGE = 0.10;
 export const getUserBookings = asyncHandler(async (req, res) => {
     const bookings = await Booking.find({ user: req.user._id })
         .populate('service', 'title images')
+        .populate('provider', 'name profileImage') 
         .populate('provider', 'name')
         .sort({ createdAt: -1 });
 
@@ -243,7 +244,11 @@ export const getUserBookings = asyncHandler(async (req, res) => {
         serviceId: b.service?._id,
         serviceTitle: b.service?.title,
         serviceImages: b.service?.images,
+        providerId: b.provider?._id,
         providerName: b.provider?.name,
+        providerImage: b.provider?.profileImage,
+        userId: b.user, 
+        bookedByUserName: req.user.name,
         bookingDate: b.bookingDate,
         timeSlot: b.timeSlot,
         status: b.status,
@@ -271,13 +276,19 @@ export const getProviderBookings = asyncHandler(async (req, res) => {
     const bookings = await Booking.find({ provider: req.user._id })
         .populate('service', 'title')
         .populate('user', 'name')
+        .populate('user', 'name profileImage')
         .sort({ createdAt: -1 });
 
     const transformedBookings = bookings.map(b => ({
-        id: b._id,
+         id: b._id,
         serviceId: b.service?._id,
         serviceTitle: b.service?.title,
+        providerId: b.provider, // <-- ADD PROVIDER ID
+        providerName: req.user.name, // The current user is the provider
+        providerImage: req.user.profileImage,
+        userId: b.user?._id, // <-- ADD USER ID
         bookedByUserName: b.user?.name,
+        bookedByUserImage: b.user?.profileImage, // <-- ADD USER IMAGE
         bookingDate: b.bookingDate,
         timeSlot: b.timeSlot,
         status: b.status,

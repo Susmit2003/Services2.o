@@ -18,7 +18,6 @@ export async function loginUser(loginData: LoginData) {
     if (response?.data?.token) {
         // This sets the secure, httpOnly cookie that persists on refresh
         cookies().set('authToken', response.data.token, {
-            httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             maxAge: 60 * 60 * 24, // 24 hours
             path: '/',

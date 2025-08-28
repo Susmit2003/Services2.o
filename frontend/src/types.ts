@@ -3,6 +3,20 @@ import { type ForwardRefExoticComponent, type RefAttributes, type SVGProps } fro
 type LucideIcon = ForwardRefExoticComponent<Omit<SVGProps<SVGSVGElement>, "ref"> & RefAttributes<SVGSVGElement>>;
 
 
+// ✅ --- START: ADD THIS NEW INTERFACE --- ✅
+export interface Message {
+  id: string;
+  _id: string;
+  conversation: string;
+  sender: string; // This will be the User's ID
+  messageType: 'text' | 'image' | 'location';
+  content: string;
+  readBy: string[];
+  createdAt: string;
+  timestamp: string;
+}
+
+
 export interface UserProfile {
     _id: string;
     id: string;
@@ -49,6 +63,9 @@ export interface Booking {
     serviceId: string;
     serviceTitle: string;
     providerId: string;
+    providerImage?: string; // <-- ADD THIS
+    userId: string;
+    bookedByUserImage?: string;
     providerName: string;
     bookedByUserName: string;
     bookingDate: string;
@@ -66,6 +83,7 @@ export interface Booking {
     providerFeedback?: { stars: number; text: string };
     cancelledBy?: 'user' | 'provider';
     cancelledAt?: string;
+    createdAt: string;
 }
 
 // --- THIS IS THE FIX ---

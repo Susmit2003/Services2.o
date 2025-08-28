@@ -17,7 +17,8 @@ import { CANCELLATION_FEE } from '@/lib/constants';
 import { RatingStars } from './rating-stars';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-
+import { ChatModal } from './chat-modal';
+import { useAuth } from '@/context/auth-context';
 
 interface UserBookingCardProps {
     booking: Booking;
@@ -30,6 +31,15 @@ export function UserBookingCard({ booking }: UserBookingCardProps) {
     const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
     const [rating, setRating] = useState(0);
     const [reviewText, setReviewText] = useState("");
+    const [isChatOpen, setIsChatOpen] = useState(false); 
+    const { currentUser } = useAuth(); 
+
+        const handleContactClick = () => {
+        // DEBUG STEP 1: Check if the click event fires
+        console.log("Contact Provider button clicked!");
+        // DEBUG STEP 2: Check if the state update is called
+        setIsChatOpen(true);
+    };
 
     const getStatusColor = (status: Booking['status']) => {
         switch (status) {
@@ -82,6 +92,7 @@ export function UserBookingCard({ booking }: UserBookingCardProps) {
     };
 
      return (
+        <>
         <Card className="shadow-lg overflow-hidden w-full">
             <CardHeader className="p-4 md:p-6">
                 <div className="flex justify-between items-start">
@@ -108,7 +119,9 @@ export function UserBookingCard({ booking }: UserBookingCardProps) {
                 )}
             </CardContent>
             <CardFooter className="bg-muted/30 p-4 flex justify-between items-center">
-                 <Button variant="ghost" size="sm"><Phone className="mr-2 h-4 w-4" /> Contact Provider</Button>
+                 <Button variant="ghost" size="sm" onClick={handleContactClick}>
+                        <Phone className="mr-2 h-4 w-4" /> Contact Provider
+                    </Button>
                  
                  <div>
                     {booking.status === 'confirmed' && (
@@ -144,5 +157,19 @@ export function UserBookingCard({ booking }: UserBookingCardProps) {
                  </div>
             </CardFooter>
         </Card>
+
+         {currentUser && (
+                <ChatModal
+                    isOpen={isChatOpen}
+                    onClose={() => setIsChatOpen(false)}
+                    booking={booking}
+                    otherUser={{
+                        id: booking.providerId,
+                        name: booking.providerName,
+                        profileImage: booking.providerImage,
+                    }}
+                />
+            )}
+        </>
     );
 }

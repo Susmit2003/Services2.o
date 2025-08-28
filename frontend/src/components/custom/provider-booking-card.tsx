@@ -205,7 +205,9 @@ import { useRouter } from 'next/navigation';
 import { verifyAndStartService, completeService, addProviderFeedback, acceptBooking, declineBooking, markAsIncomplete } from '@/lib/actions/booking.actions';
 import { PROVIDER_PLATFORM_FEE_PERCENTAGE, currencySymbols } from '@/lib/constants';
 import Link from 'next/link';
+import { useAuth } from '@/context/auth-context'; 
 import { FormattedDate } from './FormattedDate';
+import { ChatModal } from './chat-modal'; 
 
 // The component now correctly defines that it receives a 'user' prop.
 interface ProviderBookingCardProps {
@@ -216,6 +218,7 @@ interface ProviderBookingCardProps {
 export function ProviderBookingCard({ booking, user }: ProviderBookingCardProps) {
     const router = useRouter();
     const { toast } = useToast();
+    const { currentUser } = useAuth();
     
     // --- THIS IS THE FIX ---
     // We have removed the 'useAuth' hook. This component now relies entirely
@@ -229,13 +232,19 @@ export function ProviderBookingCard({ booking, user }: ProviderBookingCardProps)
     const [reviewText, setReviewText] = useState("");
     const [declineReason, setDeclineReason] = useState("");
     const [incompleteReason, setIncompleteReason] = useState("");
+    const [isChatOpen, setIsChatOpen] = useState(false);
 
     // This logic now uses the reliable 'user' prop.
     const isFreeBooking = user.monthlyFreeBookings > 0;
     const platformFee = (booking.totalPrice || 0) * PROVIDER_PLATFORM_FEE_PERCENTAGE;
     const hasSufficientBalance = user.walletBalance >= platformFee;
     const symbol = currencySymbols[user.currency] || '₹';
-
+     const handleContactClick = () => {
+        // DEBUG STEP 1: Check if the click event fires
+        console.log("Contact Customer button clicked!");
+        // DEBUG STEP 2: Check if the state update is called
+        setIsChatOpen(true);
+    };
     const getStatusColor = (status: Booking['status']) => {
         switch (status) {
             case 'completed': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
@@ -312,6 +321,7 @@ export function ProviderBookingCard({ booking, user }: ProviderBookingCardProps)
     }
 
     return (
+        <>
         <Card className="shadow-lg w-full">
             <CardHeader className="p-4">
                 <div className="flex justify-between items-center"><CardTitle className="font-headline text-xl">{booking.serviceTitle}</CardTitle><Badge className={`capitalize ${getStatusColor(booking.status)}`}>{booking.status.replace('-', ' ')}</Badge></div>
@@ -324,9 +334,26 @@ export function ProviderBookingCard({ booking, user }: ProviderBookingCardProps)
                 {booking.userFeedback && (<div className="pt-4 border-t"><h4 className="text-sm font-semibold">User's Feedback</h4><RatingStars rating={booking.userFeedback.stars} /><p className="text-sm italic">"{booking.userFeedback.text}"</p></div>)}
             </CardContent>
             <CardFooter className="bg-muted/50 p-4 flex justify-between items-center">
-                 <Button variant="ghost" size="sm"><MessageSquare className="mr-2 h-4 w-4" /> Contact</Button>
+                    <Button variant="ghost" size="sm" onClick={handleContactClick}>
+                        <MessageSquare className="mr-2 h-4 w-4" /> Contact Customer
+                    </Button>
                  <div>{renderActions()}</div>
             </CardFooter>
         </Card>
+                    {/* 5. ADD THE CHAT MODAL COMPONENT */}
+           {currentUser && (
+                 <ChatModal
+                    isOpen={isChatOpen}
+                    onClose={() => setIsChatOpen(false)}
+                    booking={booking}
+                    otherUser={{
+                        id: booking.userId,
+                        name: booking.bookedByUserName,
+                        profileImage: booking.bookedByUserImage,
+                    }}
+                />
+            )}
+        </>
+
     )
 }
