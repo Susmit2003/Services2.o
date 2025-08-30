@@ -13,6 +13,7 @@ import { useAuth } from '@/context/auth-context';
 import { uploadImage } from '@/lib/actions/cloudinary.actions';
 import { useToast } from '@/hooks/use-toast';
 import type { Message, Booking } from '@/types';
+import { getChatHistory } from '@/lib/actions/chat.actions';
 
 interface ChatModalProps {
   booking: Booking;
@@ -39,10 +40,14 @@ const ChatMessage = ({ message, isCurrentUser }: { message: Message; isCurrentUs
             const { latitude, longitude } = JSON.parse(message.content);
             const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
             if (!apiKey) return <p className="text-destructive-foreground">Google Maps API Key is missing.</p>;
-            const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${latitude},${longitude}&zoom=15&size=300x200&markers=color:red%7C${latitude},${longitude}&key=${apiKey}`;
+            const mapImageUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${latitude},${longitude}&zoom=15&size=300x200&markers=color:red%7C${latitude},${longitude}&key=${apiKey}`;
+            
+            // ✅ FIX: Use the correct Google Maps URL format with template literals
+            const clickableMapUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
             return (
-              <a href={`http://googleusercontent.com/maps/google.com/0{latitude},${longitude}`} target="_blank" rel="noopener noreferrer">
-                <img src={mapUrl} alt="Shared location" className="rounded-lg max-w-xs cursor-pointer" />
+               <a href={clickableMapUrl} target="_blank" rel="noopener noreferrer">
+                <img src={mapImageUrl} alt="Shared location" className="rounded-lg max-w-xs cursor-pointer" />
               </a>
             );
         } catch (error) {
@@ -71,6 +76,7 @@ export function ChatModal({ booking, otherUser, isOpen, onClose }: ChatModalProp
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Effect to scroll to the bottom of the chat on new messages
   useEffect(() => {
@@ -85,6 +91,14 @@ export function ChatModal({ booking, otherUser, isOpen, onClose }: ChatModalProp
   // Effect to manage Socket.IO connection
   useEffect(() => {
     if (!isOpen || !currentUser || !booking) return;
+
+        const fetchHistory = async () => {
+        setIsLoadingHistory(true);
+        const history = await getChatHistory(booking.id);
+        setMessages(history);
+        setIsLoadingHistory(false);
+    };
+    fetchHistory();
 
     // Use the js-cookie library to read the token, consistent with auth-context
     const token = Cookies.get('authToken');
@@ -150,17 +164,49 @@ export function ChatModal({ booking, otherUser, isOpen, onClose }: ChatModalProp
       setIsUploading(false);
     }
   };
-  const handleShareLocation = () => {
+  // const handleShareLocation = () => {
+  //   if (navigator.geolocation) {
+  //     navigator.geolocation.getCurrentPosition(
+  //       (position) => {
+  //         const { latitude, longitude } = position.coords;
+  //         sendMessage('location', JSON.stringify({ latitude, longitude }));
+  //       },
+  //       () => { toast({ title: 'Location Error', description: 'Could not get your location.', variant: 'destructive' }); }
+  //     );
+  //   } else {
+  //       toast({ title: 'Location Error', description: 'Geolocation is not supported by your browser.', variant: 'destructive' });
+  //   }
+  // };
+
+   const handleShareLocation = () => {
     if (navigator.geolocation) {
+      // ✅ FIX: Add options to request a more accurate location
+      const options = {
+        enableHighAccuracy: true, // This is the key change
+        timeout: 5000,            // Give the browser 5 seconds to get a fix
+        maximumAge: 0             // Don't use a cached location
+      };
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
           sendMessage('location', JSON.stringify({ latitude, longitude }));
         },
-        () => { toast({ title: 'Location Error', description: 'Could not get your location.', variant: 'destructive' }); }
+        (error) => { 
+          toast({ 
+            title: 'Location Error', 
+            description: `Could not get location: ${error.message}`, 
+            variant: 'destructive' 
+          }); 
+        },
+        options // Pass the new options object here
       );
     } else {
-        toast({ title: 'Location Error', description: 'Geolocation is not supported by your browser.', variant: 'destructive' });
+        toast({ 
+          title: 'Location Error', 
+          description: 'Geolocation is not supported by your browser.', 
+          variant: 'destructive' 
+        });
     }
   };
 
@@ -180,10 +226,24 @@ export function ChatModal({ booking, otherUser, isOpen, onClose }: ChatModalProp
           </div>
         </DialogHeader>
         
-        <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
+        {/* <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
           {messages.length > 0 ? (
             messages.map((msg, index) => (
               <ChatMessage key={index} message={msg} isCurrentUser={msg.sender === currentUser?._id} />
+            ))
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted-foreground">No messages yet.</div>
+          )}
+        </ScrollArea> */}
+        <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
+          {/* ✅ FIX: Show a loader while fetching history */}
+          {isLoadingHistory ? (
+            <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : messages.length > 0 ? (
+            messages.map((msg, index) => (
+              <ChatMessage key={msg._id || index} message={msg} isCurrentUser={msg.sender._id === currentUser?._id} />
             ))
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">No messages yet.</div>

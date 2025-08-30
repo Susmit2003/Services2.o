@@ -8,14 +8,14 @@ export interface Message {
   id: string;
   _id: string;
   conversation: string;
-  sender: string; // This will be the User's ID
+  // The sender is a populated object, not just an ID string
+  sender: Partial<UserProfile>; 
   messageType: 'text' | 'image' | 'location';
   content: string;
   readBy: string[];
   createdAt: string;
   timestamp: string;
 }
-
 
 export interface UserProfile {
     _id: string;

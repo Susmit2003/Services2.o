@@ -181,12 +181,14 @@ import { useAuth } from '@/context/auth-context';
 import { FormattedDate } from '../custom/FormattedDate';
 import { useRouter } from 'next/navigation';
 
+
 export function NotificationsPopover() {
     const { isLoggedIn } = useAuth();
     const router = useRouter();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
+    
 
     useEffect(() => {
         if (isLoggedIn) {

@@ -8,12 +8,12 @@ import http from 'http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import cookie from 'cookie'; // Make sure you have run 'npm install cookie'
-
+import Booking from './src/models/booking.model.js';
 import connectDB from './src/services/db.service.js';
 import { initializeFirebaseAdmin } from './src/services/firebase.service.js';
 import User from './src/models/user.model.js';
 import { saveMessage } from './src/controllers/chat.controller.js';
-
+import { createNotification } from './src/controllers/notification.controller.js';
 // Import all routes
 import authRoutes from './src/routes/auth.routes.js';
 import userRoutes from './src/routes/user.routes.js';
@@ -92,6 +92,54 @@ io.use(async (socket, next) => {
 });
 
 // Socket.IO Connection Handling
+// io.on('connection', (socket) => {
+//   console.log(`✅ User connected: ${socket.user.name} (${socket.id})`);
+
+//   socket.on('joinRoom', (bookingId) => {
+//     socket.join(bookingId);
+//     console.log(`[JOIN] User ${socket.user.name} joined room: ${bookingId}`);
+//   });
+
+//   socket.on('sendMessage', async (messageData) => {
+//     // 1. Save the message to the database
+//     const savedMessage = await saveMessage(messageData);
+
+//     if (savedMessage) {
+//       // 2. Broadcast the message to everyone in the room (including the sender)
+//       io.to(messageData.bookingId).emit('receiveMessage', savedMessage);
+//       console.log(`[BROADCAST] Sent message to room: ${messageData.bookingId}`);
+
+//       // 3. Handle offline notifications
+//       try {
+//         const booking = await Booking.findById(messageData.bookingId).populate('service', 'title');
+//         if (!booking) return;
+
+//         const recipientId = booking.participants.find(p => p.toString() !== savedMessage.sender._id.toString());
+//         const socketsInRoom = await io.in(messageData.bookingId).fetchSockets();
+        
+//         const isRecipientOnline = socketsInRoom.some(s => s.user.id.toString() === recipientId.toString());
+
+//         if (!isRecipientOnline) {
+//              console.log(`[OFFLINE] Recipient ${recipientId} is not in the room. Sending notification.`);
+//              await createNotification(
+//                 recipientId,
+//                 `New message from ${savedMessage.sender.name}`,
+//                 `You have a new message regarding your booking for "${booking.service.title}".`,
+//                 'booking'
+//              );
+//         }
+//       } catch (e) {
+//         console.error("Failed to send offline notification", e);
+//       }
+//     }
+//   });
+
+//   socket.on('disconnect', () => {
+//     console.log(`❌ User disconnected: ${socket.user.name} (${socket.id})`);
+//   });
+// });
+
+
 io.on('connection', (socket) => {
   console.log(`✅ User connected: ${socket.user.name} (${socket.id})`);
 
@@ -101,9 +149,43 @@ io.on('connection', (socket) => {
   });
 
   socket.on('sendMessage', async (messageData) => {
+    // 1. Save the message to the database
     const savedMessage = await saveMessage(messageData);
+
     if (savedMessage) {
+      // 2. Broadcast the message to everyone in the room (including the sender)
       io.to(messageData.bookingId).emit('receiveMessage', savedMessage);
+      console.log(`[BROADCAST] Sent message to room: ${messageData.bookingId}`);
+
+      // ✅ --- START: CORRECTED OFFLINE NOTIFICATION LOGIC --- ✅
+      try {
+        const booking = await Booking.findById(messageData.bookingId).populate('service', 'title');
+        if (!booking) return;
+
+        // Correctly identify the recipient from the booking's user and provider
+        const participants = [booking.user, booking.provider];
+        const recipientId = participants.find(p => p.toString() !== savedMessage.sender._id.toString());
+        
+        if (!recipientId) return;
+
+        const socketsInRoom = await io.in(messageData.bookingId).fetchSockets();
+        
+        const isRecipientOnline = socketsInRoom.some(s => s.user.id.toString() === recipientId.toString());
+
+        if (!isRecipientOnline) {
+             console.log(`[OFFLINE] Recipient ${recipientId} is not in the room. Sending notification.`);
+             await createNotification(
+                recipientId,
+                `New message from ${savedMessage.sender.name}`,
+                `You have a new message regarding your booking for "${booking.service.title}".`,
+                'booking',
+                
+             );
+        }
+      } catch (e) {
+        console.error("Failed to send offline notification", e);
+      }
+      // ✅ ---  END: CORRECTED OFFLINE NOTIFICATION LOGIC  --- ✅
     }
   });
 
