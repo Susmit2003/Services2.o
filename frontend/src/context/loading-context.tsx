@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+"use client";
+
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 const LoadingContext = createContext({
@@ -8,8 +10,22 @@ const LoadingContext = createContext({
 
 export const useLoading = () => useContext(LoadingContext);
 
+let globalSetLoading: ((loading: boolean) => void) | null = null;
+
+export const setGlobalLoadingSetter = (setter: (loading: boolean) => void) => {
+  globalSetLoading = setter;
+};
+
+export const triggerGlobalLoading = (loading: boolean) => {
+  if (globalSetLoading) globalSetLoading(loading);
+};
+
 export const LoadingProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setGlobalLoadingSetter(setLoading);
+  }, []);
 
   return (
     <LoadingContext.Provider value={{ isLoading, setLoading }}>

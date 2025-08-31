@@ -163,8 +163,9 @@ export default function AddServicePage() {
       const result = await createService({
         ...formData,
         zipCodes: validZipCodes,
-        images: imageUrls, 
+        images: imageUrls,
         timeSlots: selectedTimeSlots,
+        price: 0
       });
 
       if (result.error) {
