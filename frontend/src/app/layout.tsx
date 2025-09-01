@@ -139,6 +139,10 @@ function RootLayoutContent({ children }: { children: React.ReactNode }) {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#2563eb" />
+      </head>
       <body className="font-sans antialiased min-h-screen flex flex-col">
         <LoadingProvider>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>

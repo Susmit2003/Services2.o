@@ -39,12 +39,14 @@ const ChatMessage = ({ message, isCurrentUser }: { message: Message; isCurrentUs
         try {
             const { latitude, longitude } = JSON.parse(message.content);
             const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+            console.log("Using Google Maps API Key:", apiKey ? "Key Found" : "Key NOT Found");
+
             if (!apiKey) return <p className="text-destructive-foreground">Google Maps API Key is missing.</p>;
             const mapImageUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${latitude},${longitude}&zoom=15&size=300x200&markers=color:red%7C${latitude},${longitude}&key=${apiKey}`;
             
             // ✅ FIX: Use the correct Google Maps URL format with template literals
             const clickableMapUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-
+            console.log("Generated Map Image URL:", mapImageUrl);
             return (
                <a href={clickableMapUrl} target="_blank" rel="noopener noreferrer">
                 <img src={mapImageUrl} alt="Shared location" className="rounded-lg max-w-xs cursor-pointer" />
