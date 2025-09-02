@@ -15,7 +15,7 @@ import { updateUserProfile } from "@/lib/actions/user.actions";
 import { updateUserProfileSchema, UpdateUserProfileParams } from "@/lib/validations";
 import Image from "next/image";
 import type { UserProfile } from '@/types'; // <-- FIX: Import UserProfile
-
+export const dynamic = 'force-dynamic';
 type ProfileFormValues = Omit<UpdateUserProfileParams, 'profileImage'>;
 
 export default function ProfilePage() {

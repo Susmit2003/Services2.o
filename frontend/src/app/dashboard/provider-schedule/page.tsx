@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarOff } from "lucide-react";
 import type { Booking, UserProfile } from "@/types";
 import { redirect } from "next/navigation";
-
+export const dynamic = 'force-dynamic';
 export default async function ProviderSchedulePage() {
     let bookings: Booking[] = [];
     let user: UserProfile | null = null;

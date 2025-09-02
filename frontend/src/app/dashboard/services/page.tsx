@@ -163,7 +163,7 @@ import { getUserProfile } from '@/lib/actions/user.actions';
 import { DeleteServiceButton } from '@/components/custom/delete-service-button'; 
 import { ServiceStatusToggle } from '@/components/custom/service-status-toggle';
 import { format } from 'date-fns';
-
+export const dynamic = 'force-dynamic';
 const MAX_SERVICES = 3;
 
 export default async function ProviderServicesPage() {
