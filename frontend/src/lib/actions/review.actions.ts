@@ -53,7 +53,25 @@ export async function getReviewsForService(serviceId: string): Promise<Review[]>
   }
 }
 
-export const addReview = async (payload: { bookingId: string, rating: number, comment: string }) => {
-    // This assumes a backend route exists at POST /api/reviews/add
-    await apiClient.post('/reviews/add', payload, { headers: getAuthHeaders() });
-};
+// export const addReview = async (payload: { bookingId: string, rating: number, comment: string }) => {
+//     // This assumes a backend route exists at POST /api/reviews/add
+//     await apiClient.post('/reviews/add', payload, { headers: getAuthHeaders() });
+// };
+
+
+
+export async function addReview(payload: { bookingId: string, rating: number, comment: string }) {
+    try {
+        // ✅ FIX 1: The correct backend path is '/reviews'
+        const response = await apiClient.post('/reviews', payload, { headers: getAuthHeaders() });
+        
+        revalidatePath(`/dashboard/my-bookings`); // Revalidate bookings to show feedback status
+        
+        // ✅ FIX 2: Return the data from the server response
+        return response.data; 
+    } catch (error: any) {
+        // Return an object with an error key, consistent with other actions
+        return { error: error.response?.data?.message || error.message };
+    }
+}
+

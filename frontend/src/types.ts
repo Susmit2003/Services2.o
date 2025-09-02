@@ -55,6 +55,8 @@ export interface Service {
     status: 'Active' | 'Inactive' | 'Archived';
     ratingAvg: number;
     totalReviews: number;
+    totalBookings?: number; 
+    updatedAt: string; 
 }
 
 export interface Booking {
@@ -63,11 +65,11 @@ export interface Booking {
     serviceId: string;
     serviceTitle: string;
     providerId: string;
-    providerImage?: string; // <-- ADD THIS
-    userId: string;
-    bookedByUserImage?: string;
     providerName: string;
+    providerImage?: string;
+    userId: string;
     bookedByUserName: string;
+    bookedByUserImage?: string;
     bookingDate: string;
     timeSlot: string;
     status: 'pending' | 'confirmed' | 'rejected' | 'in-progress' | 'completed' | 'cancelled' | 'incompleted';
@@ -78,6 +80,9 @@ export interface Booking {
         city: string;
         pinCode: string;
     };
+    // ✅ FIX: Add the missing properties
+    paymentStatus: 'pending' | 'paid' | 'fee_paid' | 'refunded';
+    service?: Partial<Service>; // Service object can be populated
     serviceVerificationCode?: string;
     userFeedback?: { stars: number; text: string };
     providerFeedback?: { stars: number; text: string };

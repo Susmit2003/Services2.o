@@ -32,6 +32,7 @@ export default function AddServicePage() {
     category: '',
     subCategory: '',
     description: '',
+    price: 0,
     priceDisplay: ''
   });
   const [zipCodes, setZipCodes] = useState<string[]>(['']);
@@ -81,10 +82,20 @@ export default function AddServicePage() {
     );
   }
 
+  // const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  //   const { id, value } = e.target;
+  //   setFormData(prev => ({...prev, [id]: value}));
+  // };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target;
-    setFormData(prev => ({...prev, [id]: value}));
-  };
+        const { id, value } = e.target;
+        // ✅ FIX: Handle the 'price' field as a number
+        if (id === 'price') {
+            setFormData(prev => ({ ...prev, [id]: Number(value) }));
+        } else {
+            setFormData(prev => ({ ...prev, [id]: value }));
+        }
+    };
   
   const handleZipCodeChange = (index: number, value: string) => {
     const newZipCodes = [...zipCodes];
@@ -152,13 +163,24 @@ export default function AddServicePage() {
     try {
       let imageUrls = ['https://placehold.co/600x400.png'];
 
-      if (serviceImageFile && serviceImagePreview) {
-        const uploadResult = await uploadImage(serviceImagePreview, `service_images/${currentUser.id}`);
-        if ('error' in uploadResult) {
-            throw new Error(uploadResult.error);
-        }
-        imageUrls = [uploadResult.secure_url];
-      }
+      if (serviceImageFile) {
+                const formDataForUpload = new FormData();
+                formDataForUpload.append('image', serviceImageFile);
+
+                const uploadResult = await uploadImage(formDataForUpload, `service_images/${currentUser?.id}`);
+                
+                // ✅ --- START: CORRECTED TYPE GUARD --- ✅
+                // 1. Check if the 'error' property exists in the result.
+                if ('error' in uploadResult) {
+                    // If it exists, TypeScript knows it's the error object.
+                    throw new Error(uploadResult.error);
+                }
+                
+                // 2. If it doesn't exist, TypeScript knows it's the success object.
+                imageUrls = [uploadResult.secure_url];
+                // ✅ ---  END: CORRECTED TYPE GUARD  --- ✅
+            }
+
 
       const result = await createService({
         ...formData,
@@ -261,6 +283,22 @@ export default function AddServicePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+
+                <div className="space-y-2">
+                                <Label htmlFor="price" className="text-base">Base Price ({currencySymbol})</Label>
+                                <Input 
+                                    id="price" 
+                                    type="number"
+                                    value={formData.price} 
+                                    onChange={handleInputChange} 
+                                    placeholder="e.g., 50" 
+                                    className="h-12" 
+                                    required 
+                                    min="0"
+                                />
+                            </div>
+
                  <div className="space-y-2">
                     <Label htmlFor="priceDisplay" className="text-base">Price Display</Label>
                     <Input id="priceDisplay" value={formData.priceDisplay} onChange={handleInputChange} placeholder={pricePlaceholder} className="h-12" required maxLength={50} />

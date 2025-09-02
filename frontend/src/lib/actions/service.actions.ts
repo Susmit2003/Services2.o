@@ -55,6 +55,24 @@ export async function getProviderServices(): Promise<Service[]> {
 
 
 
+
+
+
+export async function unarchiveService(serviceId: string) {
+  try {
+    const response = await apiClient.patch(`/services/${serviceId}/unarchive`);
+    revalidatePath('/dashboard/my-services');
+    return response.data;
+  } catch (error: any) {
+    return { error: error.response?.data?.message || error.message };
+  }
+}
+
+
+
+
+
+
 // ... include any other actions like getServiceById, updateService, archiveService, etc.,
 // making sure to add { headers: getAuthHeaders() } to any that require authentication.
 
