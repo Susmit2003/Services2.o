@@ -3,6 +3,7 @@
   "short_name": "HandyConnect",
   "description": "Your Home, Expertly Handled. Find trusted local professionals for all your home service needs.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2563eb",
