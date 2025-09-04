@@ -1,7 +1,7 @@
 {
   "name": "HandyConnect",
   "short_name": "HandyConnect",
-  "description": "Your Home, Expertly Handled. Find trusted local professionals for all your home service needs.",
+  "description": "Your Home, Expertly Handled. Find trusted local professionals for all your home service needs...",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
