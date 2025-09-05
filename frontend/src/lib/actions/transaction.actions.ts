@@ -1,8 +1,14 @@
 "use server";
 
 import apiClient from "@/lib/api";
-import { getAuthHeaders } from "@/lib/auth/utils";
 import { Transaction } from "@/types";
+import { cookies } from 'next/headers';
+
+const getAuthHeaders = () => {
+    const token = cookies().get('authToken')?.value;
+    if (!token) throw new Error("You must be logged in.");
+    return { Authorization: `Bearer ${token}` };
+};
 
 /**
  * Fetches the wallet transaction history for the authenticated user.
