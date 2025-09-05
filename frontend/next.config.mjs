@@ -1,5 +1,3 @@
-
-import withPWA from 'next-pwa';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -10,7 +8,6 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
-      // --- ADD THIS NEW BLOCK ---
       {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
@@ -21,12 +18,17 @@ const nextConfig = {
   },
 };
 
+export const turbo = {
+  enabled: true,
+};
 
+// import withPWA from 'next-pwa';
 
+// export default withPWA({
+//   dest: 'public',
+//   register: true,
+//   skipWaiting: true,
+//   disable: process.env.NODE_ENV === 'development',
+// })(nextConfig);
 
-export default withPWA({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
-})(nextConfig);
+export default nextConfig;

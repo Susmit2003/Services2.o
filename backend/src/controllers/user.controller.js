@@ -208,9 +208,16 @@ const getUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
   if (!user) { res.status(404); throw new Error('User not found'); }
   res.json({
-    _id: user._id, name: user.name, email: user.email, mobile: user.mobile,
-    role: user.role, address: user.address, currency: user.currency,
-    walletBalance: user.walletBalance, profileImage: user.profileImage,
+    _id: user._id,
+    name: user.name,
+    username: user.username,
+    email: user.email,
+    mobile: user.mobile,
+    role: user.role,
+    address: user.address,
+    currency: user.currency,
+    walletBalance: user.walletBalance,
+    profileImage: user.profileImage,
   });
 });
 
@@ -219,6 +226,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
   if (!user) { res.status(404); throw new Error('User not found'); }
 
   user.name = req.body.name || user.name;
+  user.username = req.body.username || user.username;
   user.mobile = req.body.mobile || user.mobile;
   user.profileImage = req.body.profileImage || user.profileImage;
 
@@ -246,8 +254,17 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
   const updatedUser = await user.save();
   res.json({
-    _id: updatedUser._id, name: updatedUser.name, email: updatedUser.email,
-    mobile: updatedUser.mobile, address: updatedUser.address,
+    _id: updatedUser._id,
+    name: updatedUser.name,
+    username: updatedUser.username,
+    email: updatedUser.email,
+    mobile: updatedUser.mobile,
+    address: updatedUser.address,
+    profileImage: updatedUser.profileImage,
+    role: updatedUser.role,
+    currency: updatedUser.currency,
+    walletBalance: updatedUser.walletBalance,
+    fcmToken: updatedUser.fcmToken,
   });
 });
 
