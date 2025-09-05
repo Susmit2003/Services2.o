@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Star, MapPin } from 'lucide-react';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
-
+export const dynamic = 'force-dynamic';
 export default async function BookServicePage({ params }: { params: { serviceId: string } }) {
     const service = await getServiceById(params.serviceId);
     let user = null;

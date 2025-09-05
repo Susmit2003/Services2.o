@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { BellRing, BellOff } from "lucide-react";
 import type { Notification } from "@/types";
 import { FormattedDate } from "@/components/custom/FormattedDate";
-
+export const dynamic = 'force-dynamic';
 export default async function NotificationsPage() {
     let notifications: Notification[] = [];
     try {

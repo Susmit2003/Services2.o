@@ -2,7 +2,7 @@ import { getUserProfile } from '@/lib/actions/user.actions';
 import { getWalletTransactions } from '@/lib/actions/transaction.actions';
 import { WalletClient } from '@/components/custom/wallet-client'; // We will create this next
 import { redirect } from 'next/navigation';
-
+export const dynamic = 'force-dynamic';
 // This is now a Server Component. It runs on the server before the page loads.
 export default async function WalletPage() {
     try {

@@ -7,7 +7,7 @@ import { PlusCircle } from "lucide-react";
 import type { Service } from "@/types";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
-
+export const dynamic = 'force-dynamic';
 // This is a Server Component that fetches its own data.
 export default async function MyServicesPage() {
     let services: Service[] = [];
