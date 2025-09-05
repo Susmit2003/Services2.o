@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, User, Mail, Phone, MapPin, Save, UploadCloud } from "lucide-react";
+import { Loader2, User, Save, UploadCloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { uploadImage } from "@/lib/actions/cloudinary.actions";
 import { updateUserProfile } from "@/lib/actions/user.actions";
@@ -85,6 +85,8 @@ export default function ProfilePage() {
             
             const payload: Partial<UserProfile> = {
                 ...data,
+                username: data.username || currentUser?.username || "",
+                name: data.fullName,
                 address: data.address
                     ? {
                         line1: data.address.line1 ?? "",
@@ -94,6 +96,7 @@ export default function ProfilePage() {
                     : undefined,
                 profileImage: imageUrl === null ? undefined : imageUrl,
             };
+            // console.log("Profile update payload:", payload);
             
             await updateUserProfile(payload);
             await refetchUser();

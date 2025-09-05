@@ -10,8 +10,8 @@ export function FormattedDate({ date }: FormattedDateProps) {
   const formattedDate: string = useMemo(() => {
     if (!date) return 'N/A';
     try {
-      // Formats the date to a more readable local format, e.g., "Aug 7, 2025"
-      return new Date(date).toLocaleDateString(undefined, {
+      // Use a fixed locale to avoid SSR/client mismatch
+      return new Date(date).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
